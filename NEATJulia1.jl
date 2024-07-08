@@ -87,7 +87,7 @@ module NEATJulia
     GIN::UInt64 # current Global Innovation Number
     input::Vector{Reference{Real}}
     best_genome::Union{Nothing, Genome}
-    output::Vector{Vector{Reference{Real}}}
+    output::Matrix{Reference{Real}}
     expected_output::Vector{Reference{Real}}
     fitness::Vector{Reference{Real}}
   end
@@ -118,8 +118,8 @@ module NEATJulia
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
 
-    (isempty(input)) && (input = fill(Reference{Real}(0.0), n_inputs))
-    (isempty(output)) && (output = fill(Reference{Real}(0.0), n_outputs))
+    (isempty(input)) && (input = fill(Reference{Real}(), n_inputs))
+    (isempty(output)) && (output = fill(Reference{Real}(), n_outputs))
 
     Genome{NEAT}(n_inputs, n_outputs, ID, specie, genome, input, output, expected_output, fitness, fitness_function, super, mutation_probability)
   end
@@ -130,8 +130,11 @@ module NEATJulia
     (population_size > 0) || throw(ArgumentError("Invalid population_size $(population_size), should be > 0"))
     (isempty(population)) && (population = Vector{Genome}(undef, population_size))
 
-    input = [Reference{Real}(0.0) for i = 1:n_inputs]
-    output = [[Reference{Real}(0.0) for j = 1:n_outputs] for i = 1:population_size]
+    input = [Reference{Real}() for i = 1:n_inputs]
+    output = Matrix{Reference{Real}}(undef, population_size, n_outputs)
+    for i = 1:length(output)
+      output[i] = Reference{Real}()
+    end
     fitness = [Reference{Real}(-Inf) for i = 1:population_size]
 
     NEAT(n_inputs, n_outputs, population_size, max_generation, max_species, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, population, generation, species, GIN, input, best_genome, output, expected_output, fitness)
@@ -148,7 +151,7 @@ module NEATJulia
   end
   function Init(x::NEAT)
     for i = 1:x.population_size
-      x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i], expected_output = x.expected_output, fitness = x.fitness[i])
+      x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i])
       Init(x.population[i])
     end
     x.GIN = x.n_inputs + x.n_outputs
@@ -294,7 +297,11 @@ module NEATJulia
     return [i[] for i in x.output]
   end
   function GetOutput(x::NEAT)
-    return [GetOutput(i) for i in x.population]
+    ret = Matrix{Union{Real, Nothing}}(undef, x.population_size,x.n_outputs)
+    for i = 1:length(x.output)
+      ret[i] = x.output[i][]
+    end
+    return ret
   end
 
   function SetExpectedOutput!(x::Union{NEAT, Genome}, args::Real...)
