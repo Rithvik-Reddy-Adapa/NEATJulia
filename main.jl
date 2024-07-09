@@ -1,4 +1,4 @@
-include("./NEATJulia1.jl")
+include("./NEATJulia.jl")
 using .NEATJulia
 
 neat = NEAT(3, 3)
