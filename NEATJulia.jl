@@ -1,7 +1,7 @@
 
 module NEATJulia
   include("Reference.jl")
-  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, Crossover, GetMutationProbability, SetMutationProbability, GetLayers
+  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, Crossover, GetMutationProbability, SetMutationProbability, GetLayers, GetGenomeInfo
 
   abstract type Node end
 
@@ -127,7 +127,7 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, super, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species = 2, RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, population = Genome[], generation = 0, species = 0, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,3), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0))
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species = 2, RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, population = Genome[], generation = 0, species = 0, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0))
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -185,12 +185,9 @@ module NEATJulia
       x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i], mutation_probability = x.mutation_probability[i,:])
       Init(x.population[i])
     end
-    x.GIN = vcat(x.GIN, ["Node" nothing nothing;
-                         "Node" nothing nothing;
-                         "Node" nothing nothing;
-                         "Node" nothing nothing;
-                         "Node" nothing nothing;
-                         "Node" nothing nothing;])
+    for i = 1:x.n_inputs+x.n_outputs
+      x.GIN = vcat(x.GIN, [Unsigned(i) "Node" nothing nothing])
+    end
     return
   end
 
@@ -257,14 +254,14 @@ module NEATJulia
       end_node = rand(x.layers[end_layer])
       next_nodes_of_start_node = [i.out_node for i in start_node.out_connections]
       if !(end_node in next_nodes_of_start_node)
-        idx = findfirst(x.super.GIN[:,1].=="Connection" .&& x.super.GIN[:,2].==start_node.GIN .&& x.super.GIN[:,3].==end_node.GIN)
+        idx = findfirst(x.super.GIN[:,2].=="Connection" .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
         if isnothing(idx)
-          GIN = Unsigned(size(x.super.GIN)[1]+0x1)
+          GIN = x.super.GIN[end,1]+0x1
           x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
-          x.super.GIN = vcat(x.super.GIN, ["Connection" start_node.GIN end_node.GIN])
+          x.super.GIN = vcat(x.super.GIN, [GIN "Connection" start_node.GIN end_node.GIN])
           return 3, GIN, "new"
         else
-          GIN = idx
+          GIN = x.super.GIN[idx,1]
           x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
           return 3, GIN, "old"
         end
@@ -304,20 +301,20 @@ module NEATJulia
           if break_loop break end
         end
 
-        GIN = size(x.super.GIN)[1]+0x1
+        GIN = x.super.GIN[end,1]+0x1
         new_node = HiddenNode(GIN = GIN, super = x)
         x.genome[GIN] = new_node
-        x.super.GIN = vcat(x.super.GIN, ["Node" nothing nothing])
+        x.super.GIN = vcat(x.super.GIN, [GIN "Node" nothing nothing])
 
         GIN = GIN+0x1
         new_node_in_connection = Connection(random_connection.in_node, new_node, GIN = GIN, super = x, weight = 1)
         x.genome[GIN] = new_node_in_connection
-        x.super.GIN = vcat(x.super.GIN, ["Connection" new_node_in_connection.in_node.GIN new_node_in_connection.out_node.GIN])
+        x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_in_connection.in_node.GIN new_node_in_connection.out_node.GIN])
 
         GIN = GIN+0x1
         new_node_out_connection = Connection(new_node, random_connection.out_node, GIN = GIN, super = x, weight = random_connection.weight)
         x.genome[GIN] = new_node_out_connection
-        x.super.GIN = vcat(x.super.GIN, ["Connection" new_node_out_connection.in_node.GIN new_node_out_connection.out_node.GIN])
+        x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_out_connection.in_node.GIN new_node_out_connection.out_node.GIN])
 
         random_connection.enabled = false
 
@@ -512,6 +509,26 @@ module NEATJulia
 
   function SetFitnessFunction!(x::Union{Genome, NEAT}, func::Function)
     x.fitness_function[] = func
+  end
+
+  function GetGenomeInfo(x::Genome)
+    ret = Matrix{Union{Unsigned, String, Bool, Nothing}}(undef, length(x.genome),5)
+    for (i,j) in zip(sort(collect(keys(x.genome))), 1:length(x.genome))
+      ret[j,1] = x.genome[i].GIN
+      if typeof(x.genome[i])<:Node
+        ret[j,2] = "Node"
+        ret[j,3] = nothing
+        ret[j,4] = nothing
+        ret[j,5] = nothing
+      else
+        ret[j,2] = "Connection"
+        ret[j,3] = x.genome[i].in_node.GIN
+        ret[j,4] = x.genome[i].out_node.GIN
+        ret[j,5] = x.genome[i].enabled
+      end
+    end
+
+    return ret
   end
 
   function Relu(x::Real)
