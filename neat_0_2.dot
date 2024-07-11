@@ -1,0 +1,13 @@
+digraph {
+	rankdir=LR;
+	1->10[color=green,label="14,  -4.489",penwidth=1.0];
+	1->4[color=green,label="9,  -8.547",penwidth=1.0];
+	2->4[color=red,label="7,  -4.675",penwidth=1.0];
+	2->10[color=green,label="11,  -9.888",penwidth=1.0];
+	3->10[color=green,label="52,  9.418",penwidth=1.0];
+	{rank=same; 1, 2, 3}
+	10->4[color=green,label="12,  -7.456",penwidth=1.0];
+	10->6[color=green,label="15,  -8.66",penwidth=1.0];
+	{rank=same; 10}
+	{rank=same; 4, 5, 6}
+}

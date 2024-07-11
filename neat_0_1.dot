@@ -1,0 +1,9 @@
+digraph {
+	rankdir=LR;
+	2->4[color=red,label="7,  0.001",penwidth=1.0];
+	2->26[color=green,label="27,  2.991",penwidth=1.0];
+	{rank=same; 1, 2, 3}
+	26->4[color=green,label="28,  -1.676",penwidth=1.0];
+	{rank=same; 26}
+	{rank=same; 4, 5, 6}
+}

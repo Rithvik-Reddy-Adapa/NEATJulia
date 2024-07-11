@@ -1,7 +1,7 @@
 
 module NEATJulia
   include("Reference.jl")
-  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, Crossover, GetMutationProbability, SetMutationProbability, GetLayers, GetGenomeInfo
+  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability, GetLayers, GetGenomeInfo, GetSpecieFitness, Show
 
   abstract type Node end
 
@@ -84,7 +84,7 @@ module NEATJulia
 
     population::Vector{Genome}
     generation::Unsigned
-    species::Unsigned
+    n_species::Unsigned
     GIN::Matrix{Union{Unsigned, String, Nothing}} # list of all Global Innovation Number
     input::Vector{Reference{Real}}
     best_genome::Union{Nothing, Genome}
@@ -92,6 +92,7 @@ module NEATJulia
     expected_output::Vector{Reference{Real}}
     fitness::Vector{Reference{Real}}
     mutation_probability::Matrix{Reference{Real}}
+    specie_fitness::Matrix{Union{Nothing, Real}} # n_rows = n_species, columns = {specie number, minimum fiteness, maximum fitness, mean fitness, last topped generation}
   end
 
   function InputNode(; GIN = 0, input_number = 0, input = Reference{Real}(), output = Reference{Real}(), out_connections = Connection[], processed = false, super = nothing)
@@ -115,7 +116,7 @@ module NEATJulia
 
     return connection
   end
-  function Genome(n_inputs, n_outputs; ID = 0, specie = 0, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability = Reference{Real}.([1, 1, 0.25, 0.25]))
+  function Genome(n_inputs, n_outputs; ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability = Reference{Real}.([1, 1, 0.25, 0.25]))
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -127,7 +128,7 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, super, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species = 2, RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, population = Genome[], generation = 0, species = 0, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0))
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, population = Genome[], generation = 0, n_species = 1, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0), specie_fitness = [1 -Inf -Inf -Inf 1])
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -161,7 +162,7 @@ module NEATJulia
     end
     fitness = [Reference{Real}(-Inf) for i = 1:population_size]
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, population, generation, species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability)
+    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, specie_fitness)
   end
 
   function Init(x::Genome)
@@ -401,6 +402,66 @@ module NEATJulia
     end
   end
 
+  function Show(x::Genome; directed::Bool = true, rankdir_LR::Bool = true, connection_label::Bool = true, pen_width::Real = 1.0, export_type::String = "svg")
+    graphviz_code = ""
+
+    if rankdir_LR
+      graphviz_code *= "\trankdir=LR;\n"
+    end
+    for l in x.layers
+      temp = "\t{rank=same; "
+      for n in l
+        temp *= "$(n.GIN), "
+        if !(typeof(n) <: OutputNode)
+          for c in n.out_connections
+            if directed
+              graphviz_code *= "\t$(n.GIN)->$(c.out_node.GIN)"
+            else
+              graphviz_code *= "\t$(n.GIN)--$(c.out_node.GIN)"
+            end
+            graphviz_code *= "["
+            if c.enabled
+              graphviz_code *= "color=green"
+            else
+              graphviz_code *= "color=red"
+            end
+            graphviz_code *= ","
+            if connection_label
+              graphviz_code *= "label=\"$(c.GIN),  $(round(c.weight,digits=3))\""
+            end
+            graphviz_code *= ","
+            graphviz_code *= "penwidth=$(pen_width)"
+            graphviz_code *= "];\n"
+          end
+        end
+      end
+      temp = temp[1:end-2] * "}\n"
+      graphviz_code *= temp
+    end
+
+    if directed
+      graphviz_code = "digraph {\n" * graphviz_code * "}"
+    else
+      graphviz_code = "graph {\n" * graphviz_code * "}"
+    end
+
+    dot_filename = "neat_$(x.super.generation)_$(x.ID).dot"
+    open(dot_filename, "w") do file
+      write(file, graphviz_code)
+    end
+
+    export_types = ["svg", "png", "jpg", "jpeg", "none"]
+    if (export_type in export_types) && (export_type != "none")
+      export_filename = dot_filename[1:end-3] * export_type
+      run(`dot -T$(export_type) $(dot_filename) -o $(export_filename)`)
+    elseif export_type == "none"
+    else
+      throw(ArgumentError("Invalid export_type, got $(export_type), accepted values = $(export_types)"))
+    end
+
+    return graphviz_code
+  end
+
   function SetInput!(x::Union{NEAT, Genome}, args::Real...)
     (length(args) == x.n_inputs) || throw(ArgumentError("Invalid number of inputs, expecting $(x.n_inputs) inputs, got $(length(args))"))
     for i = 1:x.n_inputs
@@ -529,6 +590,19 @@ module NEATJulia
     end
 
     return ret
+  end
+
+  function GetSpecieFitness(x::NEAT)
+    return x.specie_fitness[.!isnothing.(x.specie_fitness[:,1]),:]
+  end
+  function GetSpecieFitness(x::NEAT, y::Unsigned)
+    idx = findfirst(x.specie_fitness[:,1].==y)
+    if isnothing(idx)
+      throw("Given invalid specie number $(y)")
+      return
+    end
+
+    return x.specie_fitness[idx,:]
   end
 
   function Relu(x::Real)
