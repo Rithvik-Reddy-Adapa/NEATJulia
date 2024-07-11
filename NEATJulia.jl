@@ -402,18 +402,22 @@ module NEATJulia
     end
   end
 
-  function Show(x::Genome; directed::Bool = true, rankdir_LR::Bool = true, connection_label::Bool = true, pen_width::Real = 1.0, export_type::String = "svg")
+  function Show(x::Genome; directed::Bool = true, rankdir_LR::Bool = true, connection_label::Bool = true, pen_width::Real = 1.0, export_type::String = "svg", simple::Bool = true)
     graphviz_code = ""
 
     if rankdir_LR
       graphviz_code *= "\trankdir=LR;\n"
     end
+    graphviz_code *= "\tnode [shape=circle];\n"
     for l in x.layers
       temp = "\t{rank=same; "
       for n in l
         temp *= "$(n.GIN), "
         if !(typeof(n) <: OutputNode)
           for c in n.out_connections
+            if simple && !c.enabled
+              continue
+            end
             if directed
               graphviz_code *= "\t$(n.GIN)->$(c.out_node.GIN)"
             else

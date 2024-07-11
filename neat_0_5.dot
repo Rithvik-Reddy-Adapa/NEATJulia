@@ -1,14 +1,13 @@
 digraph {
 	rankdir=LR;
-	1->6[color=red,label="13,  7.817",penwidth=1.0];
-	1->5[color=green,label="21,  -7.429",penwidth=1.0];
-	1->23[color=green,label="24,  1.28",penwidth=1.0];
-	2->4[color=green,label="7,  9.645",penwidth=1.0];
-	2->23[color=green,label="43,  9.601",penwidth=1.0];
-	3->4[color=green,label="22,  0.93",penwidth=1.0];
-	3->23[color=green,label="56,  0.797",penwidth=1.0];
+	node [shape=circle];
+	3->4[color=green,label="18,  -5.054",penwidth=1.0];
+	3->39[color=green,label="40,  1.0",penwidth=1.0];
+	3->5[color=green,label="12,  0.658",penwidth=1.0];
 	{rank=same; 1, 2, 3}
-	23->6[color=green,label="25,  -8.867",penwidth=1.0];
+	39->23[color=green,label="41,  3.383",penwidth=1.0];
+	{rank=same; 39}
+	23->6[color=green,label="25,  -4.923",penwidth=1.0];
 	{rank=same; 23}
 	{rank=same; 4, 5, 6}
 }
