@@ -1,7 +1,9 @@
 digraph {
 	rankdir=LR;
 	node [shape=circle];
+	3->6[color=red,label="17,  8.014",penwidth=1.0];
 	3->4[color=green,label="18,  -5.054",penwidth=1.0];
+	3->23[color=red,label="24,  3.383",penwidth=1.0];
 	3->39[color=green,label="40,  1.0",penwidth=1.0];
 	3->5[color=green,label="12,  0.658",penwidth=1.0];
 	{rank=same; 1, 2, 3}

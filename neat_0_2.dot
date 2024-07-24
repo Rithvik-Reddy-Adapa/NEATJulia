@@ -1,8 +1,10 @@
 digraph {
 	rankdir=LR;
 	node [shape=circle];
+	1->4[color=red,label="11,  0.158",penwidth=1.0];
 	1->13[color=green,label="14,  3.975",penwidth=1.0];
 	2->13[color=green,label="19,  -3.283",penwidth=1.0];
+	3->5[color=red,label="12,  -9.369",penwidth=1.0];
 	3->20[color=green,label="21,  -2.518",penwidth=1.0];
 	{rank=same; 1, 2, 3}
 	13->4[color=green,label="15,  8.502",penwidth=1.0];

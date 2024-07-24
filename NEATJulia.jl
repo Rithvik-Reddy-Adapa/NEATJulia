@@ -1,7 +1,8 @@
 
 module NEATJulia
+  using DataFrames, StatsBase
   include("Reference.jl")
-  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability, GetLayers, GetGenomeInfo, GetSpecieFitness, Show
+  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability, GetCrossoverProbability
 
   abstract type Node end
 
@@ -72,7 +73,7 @@ module NEATJulia
     n_outputs::Unsigned
     population_size::Unsigned
     max_generation::Unsigned
-    max_species::Unsigned
+    max_species_per_generation::Unsigned
     RNN_enabled::Bool
     threshold_fitness::Real
     n_genomes_to_pass::Unsigned # number of geneomes to pass fitness test for NEAT to pass
@@ -81,6 +82,10 @@ module NEATJulia
     min_weight::Real
     max_bias::Real
     min_bias::Real
+    n_individuals_considered_best::Real # number of individuals considered best in a specie in a generation. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
+    n_individuals_to_retain::Real # number of individuals to retain unchanged for next generation of a specie. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
+    crossover_probability::Vector{Real} # [intraspecie good and good, intraspecie good and bad, intraspecie bad and bad, interspecie good and good, interspecie good and bad, interspecie bad and bad]
+    max_specie_stagnation::Unsigned
 
     population::Vector{Genome}
     generation::Unsigned
@@ -92,7 +97,8 @@ module NEATJulia
     expected_output::Vector{Reference{Real}}
     fitness::Vector{Reference{Real}}
     mutation_probability::Matrix{Reference{Real}}
-    specie_fitness::Matrix{Union{Nothing, Real}} # n_rows = n_species, columns = {specie number, minimum fiteness, maximum fitness, mean fitness, last topped generation}
+    species::Dict{Unsigned, Vector{Genome}}
+    specie_info::DataFrame # n_rows = n_species, columns = {specie number, minimum fitness, maximum fitness, mean fitness, last topped generation}
   end
 
   function InputNode(; GIN = 0, input_number = 0, input = Reference{Real}(), output = Reference{Real}(), out_connections = Connection[], processed = false, super = nothing)
@@ -128,7 +134,9 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, super, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, population = Genome[], generation = 0, n_species = 1, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0), specie_fitness = [1 -Inf -Inf -Inf 1])
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species_per_generation = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20,
+
+      population = Genome[], generation = 0, n_species = 1, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0), specie_info = nothing)
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -154,6 +162,16 @@ module NEATJulia
     else
       throw(ArgumentError("mutation_probability should be of type Matrix{Reference{Real}} and of size ($(population_size), 4) or (1, 4) or (4,)"))
     end
+    isnothing(specie_info) && (specie_info = DataFrame(specie = Unsigned[],
+                                                       alive = Bool[],
+                                                       birth_generation = Unsigned[],
+                                                       death_generation = Unsigned[],
+                                                       minimum_fitness = Real[],
+                                                       maximum_fitness = Real[],
+                                                       mean_fitness = Real[],
+                                                       last_topped_generation = Unsigned[],
+                                                       last_improved_generation = Unsigned[],
+                                                       last_highest_fitness = Real[],))
 
     input = [Reference{Real}() for i = 1:n_inputs]
     output = Matrix{Reference{Real}}(undef, population_size, n_outputs)
@@ -161,8 +179,11 @@ module NEATJulia
       output[i] = Reference{Real}()
     end
     fitness = [Reference{Real}(-Inf) for i = 1:population_size]
+    species = Dict{Unsigned, Vector{Genome}}()
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, specie_fitness)
+    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species_per_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation,
+
+         population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info)
   end
 
   function Init(x::Genome)
@@ -189,42 +210,40 @@ module NEATJulia
     for i = 1:x.n_inputs+x.n_outputs
       x.GIN = vcat(x.GIN, [Unsigned(i) "Node" nothing nothing])
     end
+    x.species[0x1] = x.population
+    push!(x.specie_info, [0x1, true, 0x1, 0x0, -Inf, -Inf, -Inf, 0x1, 0x0, -Inf])
     return
   end
 
   function Crossover(x::Genome, y::Genome)
-    if x.fitness[] > y.fitness[]
-      ret = deepcopy(x)
-      for i in keys(ret.genome)
-        if haskey(y.genome, i) && (typeof(y.genome[i]) <: Connection) && rand([true, false])
-          ret.genome[i].weight = y.genome[i].weight
-        elseif haskey(y.genome, i) && (typeof(y.genome[i]) <: HiddenNode) && rand([true, false])
-          ret.genome[i].bias = y.genome[i].bias
-        elseif haskey(y.genome, i) && (typeof(y.genome[i]) <: OutputNode) && rand([true, false])
-          ret.genome[i].bias = y.genome[i].bias
-        end
-      end
-    else
-      ret = deepcopy(y)
-      for i in keys(ret.genome)
-        if haskey(x.genome, i) && (typeof(x.genome[i]) <: Connection) && rand([true, false])
-          ret.genome[i].weight = x.genome[i].weight
-        elseif haskey(x.genome, i) && (typeof(x.genome[i]) <: HiddenNode) && rand([true, false])
-          ret.genome[i].bias = x.genome[i].bias
-        elseif haskey(x.genome, i) && (typeof(x.genome[i]) <: OutputNode) && rand([true, false])
-          ret.genome[i].bias = x.genome[i].bias
-        end
+    parent1 = x
+    parent2 = y
+    if x.fitness[] < y.fitness[]
+      parent1 = y
+      parent2 = x
+    end
+    parent1.super = nothing
+    ret = deepcopy(parent1)
+    ret.super = parent2.super
+    parent1.super = parent2.super
+    for i in keys(ret.genome)
+      if haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: Connection) && rand([true, false])
+        ret.genome[i].weight = parent2.genome[i].weight
+      elseif haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: HiddenNode) && rand([true, false])
+        ret.genome[i].bias = parent2.genome[i].bias
+      elseif haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: OutputNode) && rand([true, false])
+        ret.genome[i].bias = parent2.genome[i].bias
       end
     end
     ret.ID = 0
     ret.fitness[] = -Inf
     ret.input = x.input
     for i = 1:length(ret.mutation_probability)
-      ret.mutation_probability[i][] = (x.mutation_probability[i][] + y.mutation_probability[i][])/2
+      ret.mutation_probability[i][] = (parent1.mutation_probability[i][] + parent2.mutation_probability[i][])/2
     end
-    # for i in ret.output
-    #   i[] = 0.0
-    # end
+    for i in ret.output
+      i[] = 0.0
+    end
 
     return ret
   end
@@ -396,10 +415,127 @@ module NEATJulia
       i.processed = false
     end
   end
-  function Run(x::NEAT, evaluate::Bool = false)
+  function Run(x::NEAT; evaluate::Bool = false, crossover::Bool = false, mutate::Bool = false, generation::Bool = false, full::Bool = false)
+    generation = full ? true : generation
+    mutate = generation ? true : mutate
+    crossover = mutate ? true : crossover
+    evaluate = crossover ? true : evaluate
     for i in x.population
       Run(i, evaluate)
     end
+
+    if crossover
+      # new_population = Genome[]
+      x.population = Genome[]
+      good_individuals = Dict{Unsigned, Vector{Genome}}()
+      bad_individuals = Dict{Unsigned, Vector{Genome}}()
+      for i in keys(x.species)
+        idx = sortperm(GetFitness.(x.species[i]), rev = true)
+        x.species[i] = x.species[i][idx]
+
+        x.specie_info[i,:minimum_fitness] = x.species[i][idx[end]].fitness[]
+        x.specie_info[i,:maximum_fitness] = x.species[i][idx[1]].fitness[]
+        x.specie_info[i,:mean_fitness] = mean(GetFitness.(x.species[i]))
+        if (x.specie_info[i,:last_highest_fitness] < x.specie_info[i,:mean_fitness])
+          x.specie_info[i,:last_highest_fitness] = x.specie_info[i,:mean_fitness]
+          x.specie_info[i,:last_improved_generation] = x.generation
+        end
+
+        if (x.generation-x.specie_info[i,:last_improved_generation]) > x.max_specie_stagnation
+          x.specie_info[i,:alive] = false
+          x.specie_info[i,:death_generation] = x.generation
+          delete!(x.species, i)
+          continue
+        end
+
+        if x.n_individuals_to_retain >= 1
+          x.n_individuals_to_retain = round(x.n_individuals_to_retain)
+          n_individuals_to_retain = min(x.n_individuals_to_retain, length(x.species[i]))
+        elseif x.n_individuals_to_retain >= 0 && x.n_individuals_to_retain < 1
+          n_individuals_to_retain = ceil( x.n_individuals_to_retain * length(x.species[i]) )
+        else
+          throw(ArgumentError("Invalid value for n_individuals_to_retain, got $(x.n_individuals_to_retain), should be >= 0"))
+        end
+        # append!(new_population, x.species[i][1:n_individuals_to_retain])
+        n_individuals_to_retain = Unsigned(n_individuals_to_retain)
+        append!(x.population, x.species[i][1:n_individuals_to_retain])
+
+        if x.n_individuals_considered_best >= 1
+          x.n_individuals_considered_best = round(x.n_individuals_considered_best)
+          n_individuals_considered_best = min(x.n_individuals_considered_best, length(x.species[i]))
+        elseif x.n_individuals_considered_best >= 0 && x.n_individuals_considered_best < 1
+          n_individuals_considered_best = ceil( x.n_individuals_considered_best * length(x.species[i]) )
+        else
+          throw(ArgumentError("Invalid value for n_individuals_considered_best, got $(x.n_individuals_considered_best), should be >= 0"))
+        end
+        n_individuals_considered_best = Unsigned(n_individuals_considered_best)
+        good_individuals[i] = x.species[i][1:n_individuals_considered_best]
+        bad_individuals[i] = x.species[i][n_individuals_considered_best+1:end]
+      end
+
+      for i = length(x.population)+1:x.population_size
+        crossover_probability = append!(x.crossover_probability[1:3], size(GetSpecieInfo(x, simple=true))[1]>1 ? x.crossover_probability[4:6] : [0,0,0])
+        crossover = sample([1,2,3,4,5,6], Weights(crossover_probability))
+        if crossover == 1 # intraspecie good and good
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = specie1
+
+          parent1 = rand(good_individuals[specie1])
+          parent2 = rand(good_individuals[specie2])
+
+          child = Crossover(parent1, parent2)
+        elseif crossover == 2 # intraspecie good and bad
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = specie1
+
+          parent1 = rand(good_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+
+          child = Crossover(parent1, parent2)
+        elseif crossover == 3 # intraspecie bad and bad
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = specie1
+
+          parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+
+          child = Crossover(parent1, parent2)
+        elseif crossover == 4 # interspecie good and good
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+
+          parent1 = rand(good_individuals[specie1])
+          parent2 = rand(good_individuals[specie2])
+
+          child = Crossover(parent1, parent2)
+        elseif crossover == 5 # interspecie good and bad
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+
+          parent1 = rand(good_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+
+          child = Crossover(parent1, parent2)
+        else # interspecie bad and bad
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+
+          parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+
+          child = Crossover(parent1, parent2)
+        end
+        
+        if mutate
+          Mutation(child)
+        end
+        push!(x.population, child)
+      end
+    end
+
+    if generation
+    end
+
   end
 
   function Show(x::Genome; directed::Bool = true, rankdir_LR::Bool = true, connection_label::Bool = true, pen_width::Real = 1.0, export_type::String = "svg", simple::Bool = true)
@@ -499,6 +635,9 @@ module NEATJulia
       end
     end
   end
+  function SetExpectedOutput!(x::Union{NEAT, Genome}, y::Vector{Real})
+    SetExpectedOutput!(x, y...)
+  end
 
   function GetExpectedOutput(x::Union{NEAT, Genome})
     return [i[] for i in x.expected_output]
@@ -576,37 +715,86 @@ module NEATJulia
     x.fitness_function[] = func
   end
 
-  function GetGenomeInfo(x::Genome)
-    ret = Matrix{Union{Unsigned, String, Bool, Nothing}}(undef, length(x.genome),5)
-    for (i,j) in zip(sort(collect(keys(x.genome))), 1:length(x.genome))
-      ret[j,1] = x.genome[i].GIN
+  # function GetGenomeInfo(x::Genome; simple = false)
+  #   ret = Matrix{Union{Unsigned, String, Bool, Nothing}}(undef, length(x.genome),5)
+  #   for (i,j) in zip(sort(collect(keys(x.genome))), 1:length(x.genome))
+  #     ret[j,1] = x.genome[i].GIN
+  #     if typeof(x.genome[i])<:Node
+  #       ret[j,2] = "Node"
+  #       ret[j,3] = nothing
+  #       ret[j,4] = nothing
+  #       ret[j,5] = nothing
+  #     else
+  #       ret[j,2] = "Connection"
+  #       ret[j,3] = x.genome[i].in_node.GIN
+  #       ret[j,4] = x.genome[i].out_node.GIN
+  #       ret[j,5] = x.genome[i].enabled
+  #     end
+  #   end
+  #
+  #   if simple
+  #     ret = ret[ret[:,5].!=false,:]
+  #   end
+  #
+  #   return ret
+  # end
+
+  function GetGenomeInfo(x::Genome; simple = false)
+    ret = DataFrame(GIN = Unsigned[],
+                    type = Type[],
+                    head = Vector{Union{Nothing, Unsigned}}(),
+                    tail = Vector{Union{Nothing, Unsigned}}(),
+                    enabled = Vector{Union{Nothing, Bool}}(),)
+    for i in sort(collect(keys(x.genome)))
+      temp = []
+      push!(temp, x.genome[i].GIN)
       if typeof(x.genome[i])<:Node
-        ret[j,2] = "Node"
-        ret[j,3] = nothing
-        ret[j,4] = nothing
-        ret[j,5] = nothing
+        push!(temp, typeof(x.genome[i]))
+        push!(temp, nothing)
+        push!(temp, nothing)
+        push!(temp, nothing)
       else
-        ret[j,2] = "Connection"
-        ret[j,3] = x.genome[i].in_node.GIN
-        ret[j,4] = x.genome[i].out_node.GIN
-        ret[j,5] = x.genome[i].enabled
+        push!(temp, typeof(x.genome[i]))
+        push!(temp, x.genome[i].in_node.GIN)
+        push!(temp, x.genome[i].out_node.GIN)
+        push!(temp, x.genome[i].enabled)
       end
+      push!(ret, temp)
+    end
+
+    if simple
+      ret = ret[ret[:,5].!=false,:]
     end
 
     return ret
   end
 
-  function GetSpecieFitness(x::NEAT)
-    return x.specie_fitness[.!isnothing.(x.specie_fitness[:,1]),:]
+  function GetSpecieInfo(x::NEAT; simple = true)
+    if simple
+      ret = copy(x.specie_info[x.specie_info[:,:alive].==true,:])
+    else
+      ret = copy(x.specie_info)
+    end
+    
+    return ret
   end
-  function GetSpecieFitness(x::NEAT, y::Unsigned)
-    idx = findfirst(x.specie_fitness[:,1].==y)
+  function GetSpecieInfo(x::NEAT, y::Unsigned)
+    idx = findfirst(x.specie_info[:,:specie].==y)
     if isnothing(idx)
-      throw("Given invalid specie number $(y)")
+      throw("Got invalid specie number $(y)")
       return
     end
 
-    return x.specie_fitness[idx,:]
+    return GetSpecieInfo(x)[idx,:]
+  end
+
+  function SetCrossoverProbability(x::NEAT, y::Vector{Union{Nothing, T}}) where T<:Real
+    (length(y)==6) || throw(ArgumentError("Got vector of length != 6"))
+    x.crossover_probability[.!isnothing.(y)] .= y[.!isnothing.(y)]
+  end
+
+  function GetCrossoverProbability(x::NEAT)
+    return copy(x.crossover_probability)
   end
 
   function Relu(x::Real)
