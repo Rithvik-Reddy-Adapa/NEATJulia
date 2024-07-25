@@ -12,6 +12,7 @@ module NEATJulia
     input::Reference{Real}
     output::Reference{Real}
     out_connections::Vector{Connection}
+    const enabled::Bool
     processed::Bool
     super::Union{Nothing, Genome}
   end
@@ -24,6 +25,7 @@ module NEATJulia
     out_connections::Vector{Connection}
     activation::Function
     bias::Real
+    enabled::Bool
     processed::Bool
     super::Union{Nothing, Genome}
   end
@@ -36,6 +38,7 @@ module NEATJulia
     output_number::Unsigned
     activation::Function
     bias::Real
+    const enabled::Bool
     processed::Bool
     super::Union{Nothing, Genome}
   end
@@ -102,13 +105,16 @@ module NEATJulia
   end
 
   function InputNode(; GIN = 0, input_number = 0, input = Reference{Real}(), output = Reference{Real}(), out_connections = Connection[], processed = false, super = nothing)
-    InputNode{Connection, Genome}(GIN, input_number, input, output, out_connections, processed, super)
+    enabled = true
+    InputNode{Connection, Genome}(GIN, input_number, input, output, out_connections, enabled, processed, super)
   end
   function HiddenNode(; GIN = 0, in_connections = Connection[], input = Reference{Real}[], output = Reference{Real}(), out_connections = Connection[], activation = Relu, bias = 0.0, processed = false, super = nothing)
-    HiddenNode{Connection, Genome}(GIN, in_connections, input, output, out_connections, activation, bias, processed, super)
+    enabled = true
+    HiddenNode{Connection, Genome}(GIN, in_connections, input, output, out_connections, activation, bias, enabled, processed, super)
   end
   function OutputNode(; GIN = 0, in_connections = Connection[], input = Reference{Real}[], output = Reference{Real}(), output_number = 0, activation = Relu, bias = 0.0, processed = false, super = nothing)
-    OutputNode{Connection, Genome}(GIN, in_connections, input, output, output_number, activation, bias, processed, super)
+    enabled = true
+    OutputNode{Connection, Genome}(GIN, in_connections, input, output, output_number, activation, bias, enabled, processed, super)
   end
   function Connection(in_node, out_node; GIN = 0, weight = rand(), enabled = true, processed = false, super = nothing)
 
@@ -360,6 +366,10 @@ module NEATJulia
     return x.output[]
   end
   function Run(x::HiddenNode)
+    if !(x.enabled)
+      x.processed = true
+      return
+    end
     output = 0.0
     for i in x.in_connections
       if i.enabled
@@ -391,7 +401,8 @@ module NEATJulia
     return x.output
   end
   function Run(x::Connection)
-    if !(x.enabled)
+    if !(x.enabled) || !(x.in_node.enabled) || !(x.out_node.enabled)
+      x.processed = true
       return
     end
     if !(x.in_node.processed)
@@ -608,6 +619,10 @@ module NEATJulia
       x.input[i][] = args[i]
     end
   end
+  function SetInput!(x::Union{NEAT, Genome}, y::Vector{Real})
+    SetInput!(x, y...)
+  end
+
   function GetInput(x::Union{NEAT, Genome})
     return [i[] for i in x.input]
   end
@@ -673,19 +688,19 @@ module NEATJulia
     end
   end
 
-  function GetLayers(x::Genome)
+  function GetLayers(x::Genome; simple::Bool = true)
     ret = Vector{Unsigned}[]
     for i in x.layers
-      temp = [j.GIN for j in i]
+      temp = [j.GIN for j in i if (!simple || j.enabled)]
       push!(ret, temp)
     end
 
     return ret
   end
-  function GetLayers(x::NEAT)
+  function GetLayers(x::NEAT; simple::Bool = true)
     ret = Vector{Vector{Unsigned}}[]
     for i in x.population
-      push!(ret, GetLayers(i))
+      push!(ret, GetLayers(i, simple))
     end
 
     return ret
@@ -715,35 +730,11 @@ module NEATJulia
     x.fitness_function[] = func
   end
 
-  # function GetGenomeInfo(x::Genome; simple = false)
-  #   ret = Matrix{Union{Unsigned, String, Bool, Nothing}}(undef, length(x.genome),5)
-  #   for (i,j) in zip(sort(collect(keys(x.genome))), 1:length(x.genome))
-  #     ret[j,1] = x.genome[i].GIN
-  #     if typeof(x.genome[i])<:Node
-  #       ret[j,2] = "Node"
-  #       ret[j,3] = nothing
-  #       ret[j,4] = nothing
-  #       ret[j,5] = nothing
-  #     else
-  #       ret[j,2] = "Connection"
-  #       ret[j,3] = x.genome[i].in_node.GIN
-  #       ret[j,4] = x.genome[i].out_node.GIN
-  #       ret[j,5] = x.genome[i].enabled
-  #     end
-  #   end
-  #
-  #   if simple
-  #     ret = ret[ret[:,5].!=false,:]
-  #   end
-  #
-  #   return ret
-  # end
-
-  function GetGenomeInfo(x::Genome; simple = false)
+  function GetGenomeInfo(x::Genome; simple::Bool = false)
     ret = DataFrame(GIN = Unsigned[],
                     type = Type[],
-                    head = Vector{Union{Nothing, Unsigned}}(),
-                    tail = Vector{Union{Nothing, Unsigned}}(),
+                    in_node = Vector{Union{Nothing, Unsigned}}(),
+                    out_node = Vector{Union{Nothing, Unsigned}}(),
                     enabled = Vector{Union{Nothing, Bool}}(),)
     for i in sort(collect(keys(x.genome)))
       temp = []
@@ -752,7 +743,7 @@ module NEATJulia
         push!(temp, typeof(x.genome[i]))
         push!(temp, nothing)
         push!(temp, nothing)
-        push!(temp, nothing)
+        push!(temp, x.genome[i].enabled)
       else
         push!(temp, typeof(x.genome[i]))
         push!(temp, x.genome[i].in_node.GIN)
@@ -769,7 +760,7 @@ module NEATJulia
     return ret
   end
 
-  function GetSpecieInfo(x::NEAT; simple = true)
+  function GetSpecieInfo(x::NEAT; simple::Bool = true)
     if simple
       ret = copy(x.specie_info[x.specie_info[:,:alive].==true,:])
     else
