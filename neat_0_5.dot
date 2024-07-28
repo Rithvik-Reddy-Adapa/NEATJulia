@@ -1,15 +1,30 @@
 digraph {
 	rankdir=LR;
 	node [shape=circle];
-	3->6[color=red,label="17,  8.014",penwidth=1.0];
-	3->4[color=green,label="18,  -5.054",penwidth=1.0];
-	3->23[color=red,label="24,  3.383",penwidth=1.0];
-	3->39[color=green,label="40,  1.0",penwidth=1.0];
-	3->5[color=green,label="12,  0.658",penwidth=1.0];
+	1->4[color=red,label="7,  0.57",penwidth=1.0];
+	1->13[color=red,label="14,  1.0",penwidth=1.0];
+	1->19[color=red,label="20,  1.0",penwidth=1.0];
+	1->25[color=green,label="26,  1.0",penwidth=1.0];
+	1 [color=green]
+	2 [color=green]
+	3 [color=green]
 	{rank=same; 1, 2, 3}
-	39->23[color=green,label="41,  3.383",penwidth=1.0];
-	{rank=same; 39}
-	23->6[color=green,label="25,  -4.923",penwidth=1.0];
-	{rank=same; 23}
+	25->19[color=green,label="27,  7.602",penwidth=1.0];
+	25 [color=green]
+	{rank=same; 25}
+	19->13[color=green,label="21,  1.552",penwidth=1.0];
+	19 [color=green]
+	{rank=same; 19}
+	13->4[color=red,label="15,  0.57",penwidth=1.0];
+	13->16[color=green,label="17,  1.0",penwidth=1.0];
+	13 [color=green]
+	{rank=same; 13}
+	16->4[color=green,label="18,  0.57",penwidth=1.0];
+	16->5[color=green,label="28,  0.874",penwidth=1.0];
+	16 [color=green]
+	{rank=same; 16}
+	4 [color=green]
+	5 [color=green]
+	6 [color=green]
 	{rank=same; 4, 5, 6}
 }

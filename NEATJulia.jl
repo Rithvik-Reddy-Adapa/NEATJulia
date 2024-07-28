@@ -2,7 +2,7 @@
 module NEATJulia
   using DataFrames, StatsBase
   include("Reference.jl")
-  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability, GetCrossoverProbability
+  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability!, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability!, GetCrossoverProbability
 
   abstract type Node end
 
@@ -58,6 +58,9 @@ module NEATJulia
   mutable struct Genome{NEAT}
     n_inputs::Unsigned
     n_outputs::Unsigned
+    super::Union{Nothing, NEAT}
+    const _n_mutations::Unsigned
+
     ID::Unsigned
     specie::Unsigned
     genome::Dict{Unsigned, Union{Node, Connection}} # Global Innovation Number => Node / Connection
@@ -67,8 +70,7 @@ module NEATJulia
     expected_output::Vector{Reference{Real}}
     fitness::Reference{Real}
     fitness_function::Reference{Union{Nothing, Function}}
-    super::Union{Nothing, NEAT}
-    mutation_probability::Vector{Reference{Real}} # Probobility of different types of mutations 1: update weight, 2: update bias, 3: add connection, 4: add node
+    mutation_probability::Vector{Reference{Real}} # Probobility of different types of mutations 1: update weight, 2: update bias, 3: add/enable connection, 4: add/enable node, 5: disable connection, 6: disable node
   end
 
   mutable struct NEAT
@@ -89,6 +91,7 @@ module NEATJulia
     n_individuals_to_retain::Real # number of individuals to retain unchanged for next generation of a specie. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
     crossover_probability::Vector{Real} # [intraspecie good and good, intraspecie good and bad, intraspecie bad and bad, interspecie good and good, interspecie good and bad, interspecie bad and bad]
     max_specie_stagnation::Unsigned
+    const _n_mutations::Unsigned
 
     population::Vector{Genome}
     generation::Unsigned
@@ -128,7 +131,7 @@ module NEATJulia
 
     return connection
   end
-  function Genome(n_inputs, n_outputs; ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability = Reference{Real}.([1, 1, 0.25, 0.25]))
+  function Genome(n_inputs, n_outputs; ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability = Reference{Real}.([1, 1, 0.25, 0.25, 0.1, 0.1, 0.1, 0.1]))
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -137,8 +140,9 @@ module NEATJulia
     (isempty(output)) && (output = fill(Reference{Real}(), n_outputs))
 
     layers = Vector{Node}[]
+    _n_mutations = 0x8
 
-    Genome{NEAT}(n_inputs, n_outputs, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, super, mutation_probability)
+    Genome{NEAT}(n_inputs, n_outputs, super, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
   function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species_per_generation = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20,
 
@@ -148,25 +152,34 @@ module NEATJulia
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
     (population_size > 0) || throw(ArgumentError("Invalid population_size $(population_size), should be > 0"))
     (isempty(population)) && (population = Vector{Genome}(undef, population_size))
+    _n_mutations = 0x8
     if isempty(mutation_probability)
-      mutation_probability = Matrix{Reference{Real}}(undef, population_size,4)
+      mutation_probability = Matrix{Reference{Real}}(undef, population_size,_n_mutations)
       for i = eachrow(mutation_probability)
         i[1] = Reference{Real}(1.0)
         i[2] = Reference{Real}(1.0)
         i[3] = Reference{Real}(0.25)
         i[4] = Reference{Real}(0.25)
+        i[5] = Reference{Real}(0.1)
+        i[6] = Reference{Real}(0.1)
+        i[7] = Reference{Real}(0.1)
+        i[8] = Reference{Real}(0.1)
       end
-    elseif size(mutation_probability) == (1,4) || size(mutation_probability) == (4,)
-      temp_mutation_probability = Matrix{Reference{Real}}(undef, population_size,4)
+    elseif size(mutation_probability) == (1,_n_mutations) || size(mutation_probability) == (_n_mutations,)
+      temp_mutation_probability = Matrix{Reference{Real}}(undef, population_size,_n_mutations)
       for i = eachrow(temp_mutation_probability)
         i[1] = Reference{Real}(mutation_probability[1][])
         i[2] = Reference{Real}(mutation_probability[2][])
         i[3] = Reference{Real}(mutation_probability[3][])
         i[4] = Reference{Real}(mutation_probability[4][])
+        i[5] = Reference{Real}(mutation_probability[5][])
+        i[6] = Reference{Real}(mutation_probability[6][])
+        i[7] = Reference{Real}(mutation_probability[7][])
+        i[8] = Reference{Real}(mutation_probability[8][])
       end
       mutation_probability = temp_mutation_probability
     else
-      throw(ArgumentError("mutation_probability should be of type Matrix{Reference{Real}} and of size ($(population_size), 4) or (1, 4) or (4,)"))
+      throw(ArgumentError("mutation_probability should be of type Matrix{Reference{Real}} and of size ($(population_size), $(_n_mutations)) or (1, $(_n_mutations)) or ($(_n_mutations),)"))
     end
     isnothing(specie_info) && (specie_info = DataFrame(specie = Unsigned[],
                                                        alive = Bool[],
@@ -187,7 +200,7 @@ module NEATJulia
     fitness = [Reference{Real}(-Inf) for i = 1:population_size]
     species = Dict{Unsigned, Vector{Genome}}()
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species_per_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation,
+    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species_per_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, _n_mutations,
 
          population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info)
   end
@@ -228,10 +241,11 @@ module NEATJulia
       parent1 = y
       parent2 = x
     end
+    super = parent1.super
     parent1.super = nothing
     ret = deepcopy(parent1)
-    ret.super = parent2.super
-    parent1.super = parent2.super
+    ret.super = super
+    parent1.super = super
     for i in keys(ret.genome)
       if haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: Connection) && rand([true, false])
         ret.genome[i].weight = parent2.genome[i].weight
@@ -255,105 +269,154 @@ module NEATJulia
   end
 
   function Mutation(x::Genome)
-    cum_mutation_probability = cumsum(GetMutationProbability(x))
-    random_value = rand()*cum_mutation_probability[end]
+    mutation = sample(collect(1:x._n_mutations), Weights(GetMutationProbability(x)))
 
-    if random_value <= cum_mutation_probability[1] # update weight
-      connections = [i for i in values(x.genome) if typeof(i)<:Connection]
-      if !(isempty(connections))
-        random_connection = rand(connections)
-        while !(random_connection.enabled)
-          random_connection = rand(connections)
-        end
-        random_connection.weight = x.super.min_weight + (x.super.max_weight - x.super.min_weight)*rand()
-        return 1, random_connection.GIN
+    if mutation == 1 # update weight
+      genome_info = GetGenomeInfo(x, simple = true)
+      connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
+      if isempty(connections)
+        return 1
       end
-    elseif random_value <= cum_mutation_probability[2] # update bias
-      nodes = [i for i in values(x.genome) if ((typeof(i)<:HiddenNode) || (typeof(i)<:OutputNode))]
+      connections = [x.genome[i] for i in connections]
+      random_connection = rand(connections)
+      random_connection.weight = x.super.min_weight + (x.super.max_weight - x.super.min_weight)*rand()
+      return 1, random_connection.GIN
+    elseif mutation == 2 # update bias
+      genome_info = GetGenomeInfo(x, simple = true)
+      nodes = genome_info[(genome_info[:,:type].<:HiddenNode).||(genome_info[:,:type].<:OutputNode),:GIN]
+      nodes = [x.genome[i] for i in nodes]
       random_node = rand(nodes)
       random_node.bias = x.super.min_bias + (x.super.max_bias - x.super.min_bias)*rand()
       return 2, random_node.GIN
-    elseif random_value <= cum_mutation_probability[3] # add connection
-      start_layer = rand(1:length(x.layers)-1)
-      start_node = rand(x.layers[start_layer])
-      end_layer = rand(start_layer+1:length(x.layers))
-      end_node = rand(x.layers[end_layer])
-      next_nodes_of_start_node = [i.out_node for i in start_node.out_connections]
-      if !(end_node in next_nodes_of_start_node)
-        idx = findfirst(x.super.GIN[:,2].=="Connection" .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
-        if isnothing(idx)
-          GIN = x.super.GIN[end,1]+0x1
-          x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
-          x.super.GIN = vcat(x.super.GIN, [GIN "Connection" start_node.GIN end_node.GIN])
-          return 3, GIN, "new"
-        else
-          GIN = x.super.GIN[idx,1]
-          x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
-          return 3, GIN, "old"
+    elseif mutation <= 3 # add connection
+      for itr = 1:3
+        start_layer = rand(1:length(x.layers)-1)
+        start_node = rand(x.layers[start_layer])
+        end_layer = rand(start_layer+1:length(x.layers))
+        end_node = rand(x.layers[end_layer])
+        next_nodes_of_start_node = [i.out_node for i in start_node.out_connections]
+        if !(end_node in next_nodes_of_start_node)
+          idx = findfirst(x.super.GIN[:,2].=="Connection" .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
+          if isnothing(idx)
+            GIN = x.super.GIN[end,1]+0x1
+            x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
+            x.super.GIN = vcat(x.super.GIN, [GIN "Connection" start_node.GIN end_node.GIN])
+            return 3, GIN, "new"
+          else
+            GIN = x.super.GIN[idx,1]
+            x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
+            return 3, GIN, "old"
+          end
         end
       end
-    elseif random_value <= cum_mutation_probability[4] # add node
-      connections = [i for i in values(x.genome) if typeof(i)<:Connection]
-      if !(isempty(connections))
-        # get a random connection
+      return 3
+    elseif mutation <= 4 # add node
+      genome_info = GetGenomeInfo(x, simple = true)
+      connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
+      if isempty(connections)
+        return 4
+      end
+      connections = [x.genome[i] for i in connections]
+      # get a random connection
+      random_connection = rand(connections)
+      while !(random_connection.enabled)
         random_connection = rand(connections)
-        while !(random_connection.enabled)
-          random_connection = rand(connections)
-        end
-
-        # find the layer number of the random connection's in node
-        for i = 1:length(x.layers)-1
-          break_loop = false
-          for j in x.layers[i]
-            if j == random_connection.in_node
-              start_layer = i
-              break_loop = true
-              break
-            end
-          end
-          if break_loop break end
-        end
-
-        # find the layer number of the random connection's out node
-        for i = start_layer+1:length(x.layers)
-          break_loop = false
-          for j in x.layers[i]
-            if j == random_connection.out_node
-              end_layer = i
-              break_loop = true
-              break
-            end
-          end
-          if break_loop break end
-        end
-
-        GIN = x.super.GIN[end,1]+0x1
-        new_node = HiddenNode(GIN = GIN, super = x)
-        x.genome[GIN] = new_node
-        x.super.GIN = vcat(x.super.GIN, [GIN "Node" nothing nothing])
-
-        GIN = GIN+0x1
-        new_node_in_connection = Connection(random_connection.in_node, new_node, GIN = GIN, super = x, weight = 1)
-        x.genome[GIN] = new_node_in_connection
-        x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_in_connection.in_node.GIN new_node_in_connection.out_node.GIN])
-
-        GIN = GIN+0x1
-        new_node_out_connection = Connection(new_node, random_connection.out_node, GIN = GIN, super = x, weight = random_connection.weight)
-        x.genome[GIN] = new_node_out_connection
-        x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_out_connection.in_node.GIN new_node_out_connection.out_node.GIN])
-
-        random_connection.enabled = false
-
-        # get a random layer for new node
-        new_node_layer = rand(start_layer+0.5:0.5:end_layer-0.5)
-        if new_node_layer == floor(new_node_layer) # add into existing layer
-          push!(x.layers[Unsigned(new_node_layer)], new_node)
-        else
-          insert!(x.layers, Unsigned(ceil(new_node_layer)), [new_node])
-        end
-
-        return 4, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
       end
+
+      # find the layer number of the random connection's in node
+      start_layer = 1
+      for i = 1:length(x.layers)-1
+        break_loop = false
+        for j in x.layers[i]
+          if j == random_connection.in_node
+            start_layer = i
+            break_loop = true
+            break
+          end
+        end
+        if break_loop break end
+      end
+
+      # find the layer number of the random connection's out node
+      end_layer = 1
+      for i = start_layer+1:length(x.layers)
+        break_loop = false
+        for j in x.layers[i]
+          if j == random_connection.out_node
+            end_layer = i
+            break_loop = true
+            break
+          end
+        end
+        if break_loop break end
+      end
+
+      GIN = x.super.GIN[end,1]+0x1
+      new_node = HiddenNode(GIN = GIN, super = x)
+      x.genome[GIN] = new_node
+      x.super.GIN = vcat(x.super.GIN, [GIN "Node" nothing nothing])
+
+      GIN = GIN+0x1
+      new_node_in_connection = Connection(random_connection.in_node, new_node, GIN = GIN, super = x, weight = 1)
+      x.genome[GIN] = new_node_in_connection
+      x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_in_connection.in_node.GIN new_node_in_connection.out_node.GIN])
+
+      GIN = GIN+0x1
+      new_node_out_connection = Connection(new_node, random_connection.out_node, GIN = GIN, super = x, weight = random_connection.weight)
+      x.genome[GIN] = new_node_out_connection
+      x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_out_connection.in_node.GIN new_node_out_connection.out_node.GIN])
+
+      random_connection.enabled = false
+
+      # get a random layer for new node
+      new_node_layer = rand(start_layer+0.5:0.5:end_layer-0.5)
+      if new_node_layer == floor(new_node_layer) # add into existing layer
+        push!(x.layers[Unsigned(new_node_layer)], new_node)
+      else
+        insert!(x.layers, Unsigned(ceil(new_node_layer)), [new_node])
+      end
+
+      return 4, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
+    elseif mutation <= 5 # disable connection
+      genome_info = GetGenomeInfo(x, simple = true)
+      connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
+      if isempty(connections)
+        return 5
+      end
+      connections = [x.genome[i] for i in connections]
+      random_connection = rand(connections)
+      random_connection.enabled = false
+      return 5, random_connection.GIN
+    elseif mutation == 6 # disable node
+      genome_info = GetGenomeInfo(x, simple = true)
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode),:GIN]
+      if isempty(hidden_nodes)
+        return 6
+      end
+      hidden_nodes = [x.genome[i] for i in hidden_nodes]
+      random_hidden_node = rand(hidden_nodes)
+      random_hidden_node.enabled = false
+      return 6, random_hidden_node.GIN
+    elseif mutation == 7 # enable connection
+      genome_info = GetGenomeInfo(x)
+      connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==false),:GIN]
+      if isempty(connections)
+        return 7
+      end
+      connections = [x.genome[i] for i in connections]
+      random_connection = rand(connections)
+      random_connection.enabled = true
+      return 7, connection.GIN
+    elseif mutation == 8 # enable node
+      genome_info = GetGenomeInfo(x)
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==false),:GIN]
+      if isempty(hidden_nodes)
+        return 8
+      end
+      hidden_nodes = [x.genome[i] for i in hidden_nodes]
+      random_hidden_node = rand(hidden_nodes)
+      random_hidden_node.enabled = true
+      return 8, random_hidden_node.GIN
     end
   end
 
@@ -426,8 +489,7 @@ module NEATJulia
       i.processed = false
     end
   end
-  function Run(x::NEAT; evaluate::Bool = false, crossover::Bool = false, mutate::Bool = false, generation::Bool = false, full::Bool = false)
-    generation = full ? true : generation
+  function Run(x::NEAT; evaluate::Bool = false, crossover::Bool = false, mutate::Bool = false, generation::Bool = false)
     mutate = generation ? true : mutate
     crossover = mutate ? true : crossover
     evaluate = crossover ? true : evaluate
@@ -559,6 +621,9 @@ module NEATJulia
     for l in x.layers
       temp = "\t{rank=same; "
       for n in l
+        if simple && !n.enabled
+          continue
+        end
         temp *= "$(n.GIN), "
         if !(typeof(n) <: OutputNode)
           for c in n.out_connections
@@ -585,6 +650,7 @@ module NEATJulia
             graphviz_code *= "];\n"
           end
         end
+        graphviz_code *= n.enabled ? "\t$(n.GIN) [color=green]\n" : "\t$(n.GIN) [color=red]\n"
       end
       temp = temp[1:end-2] * "}\n"
       graphviz_code *= temp
@@ -662,7 +728,7 @@ module NEATJulia
     return [i[] for i in x.mutation_probability]
   end
   function GetMutationProbability(x::NEAT)
-    ret = Matrix{Union{Nothing, Real}}(undef, x.population_size,4)
+    ret = Matrix{Union{Nothing, Real}}(undef, x.population_size,x._n_mutations)
     for i = 1:length(x.mutation_probability)
       ret[i] = x.mutation_probability[i][]
     end
@@ -670,9 +736,9 @@ module NEATJulia
     return ret
   end
 
-  function SetMutationProbability(x::Genome, args::Real...)
-    if length(args) != 4
-      throw(ArgumentError("Invalid number of probabilities expected 4, instead got $(length(args))"))
+  function SetMutationProbability!(x::Genome, args::Real...)
+    if length(args) != x._n_mutations
+      throw(ArgumentError("Invalid number of probabilities expected $(x._n_mutations), instead got $(length(args))"))
     end
     if any(args.<0.0)
       throw(ArgumentError("Probabilities should be greater >= 0.0, instead got a negative number"))
@@ -682,9 +748,17 @@ module NEATJulia
       i[] = j
     end
   end
-  function SetMutationProbability(x::NEAT, idx::Union{Unsigned, Vector{Unsigned}, OrdinalRange{Unsigned, Unsigned}}, args::Real...)
+  function SetMutationProbability!(x::Genome, y::Vector{Real})
+    SetMutationProbability!(x, y...)
+  end
+  function SetMutationProbability!(x::NEAT, idx::Union{Unsigned, Vector{Unsigned}, OrdinalRange{Unsigned, Unsigned}}, args::Real...)
     for i in idx
-      SetMutationProbability(x.population[i], args...)
+      SetMutationProbability!(x.population[i], args...)
+    end
+  end
+  function SetMutationProbability!(x::NEAT, idx::Union{Unsigned, Vector{Unsigned}, OrdinalRange{Unsigned, Unsigned}}, y::Vector{Real})
+    for i in idx
+      SetMutationProbability!(x.population[i], y...)
     end
   end
 
@@ -779,7 +853,7 @@ module NEATJulia
     return GetSpecieInfo(x)[idx,:]
   end
 
-  function SetCrossoverProbability(x::NEAT, y::Vector{Union{Nothing, T}}) where T<:Real
+  function SetCrossoverProbability!(x::NEAT, y::Vector{Union{Nothing, T}}) where T<:Real
     (length(y)==6) || throw(ArgumentError("Got vector of length != 6"))
     x.crossover_probability[.!isnothing.(y)] .= y[.!isnothing.(y)]
   end

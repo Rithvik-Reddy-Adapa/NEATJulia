@@ -7,6 +7,10 @@ mutable struct Reference{T}
   function Reference{T}(v::Union{Nothing, T} = nothing) where T
     new(v)
   end
+  function Reference(v::Union{Nothing, T} = nothing) where T
+    type = v == nothing ? Any : typeof(v)
+    new{type}(v)
+  end
 end
 
 function getindex(x::Reference)
