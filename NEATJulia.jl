@@ -70,7 +70,7 @@ module NEATJulia
     expected_output::Vector{Reference{Real}}
     fitness::Reference{Real}
     fitness_function::Reference{Union{Nothing, Function}}
-    mutation_probability::Vector{Reference{Real}} # Probobility of different types of mutations 1: update weight, 2: update bias, 3: add/enable connection, 4: add/enable node, 5: disable connection, 6: disable node
+    mutation_probability::Union{Nothing, DataFrame} # Probobility of different types of mutations 1: update weight, 2: update bias, 3: add/enable connection, 4: add/enable node, 5: disable connection, 6: disable node
   end
 
   mutable struct NEAT
@@ -102,7 +102,7 @@ module NEATJulia
     output::Matrix{Reference{Real}}
     expected_output::Vector{Reference{Real}}
     fitness::Vector{Reference{Real}}
-    mutation_probability::Matrix{Reference{Real}}
+    mutation_probability::DataFrame
     species::Dict{Unsigned, Vector{Genome}}
     specie_info::DataFrame # n_rows = n_species, columns = {specie number, minimum fitness, maximum fitness, mean fitness, last topped generation}
   end
@@ -131,55 +131,150 @@ module NEATJulia
 
     return connection
   end
-  function Genome(n_inputs, n_outputs; ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability = Reference{Real}.([1, 1, 0.25, 0.25, 0.1, 0.1, 0.1, 0.1]))
+  function Genome(n_inputs, n_outputs; ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Reference{Real}}} = nothing) where T<:Real
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
 
-    (isempty(input)) && (input = fill(Reference{Real}(), n_inputs))
-    (isempty(output)) && (output = fill(Reference{Real}(), n_outputs))
+    (isempty(input)) && (input = [Reference{Real}() for i in 1:n_inputs])
+    (isempty(output)) && (output = [Reference{Real}() for i in 1:n_outputs])
 
     layers = Vector{Node}[]
-    _n_mutations = 0x8
+
+    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node]
+    _n_mutations = length(types_of_mutation_probability)|>Unsigned
+    if isnothing(mutation_probability) # do nothing
+      mutation_probability = DataFrame(types_of_mutation_probability[1] => Reference{Real}[Reference{Real}(3)],
+                                       types_of_mutation_probability[2] => Reference{Real}[Reference{Real}(1)],
+                                       types_of_mutation_probability[3] => Reference{Real}[Reference{Real}(1)],
+                                       types_of_mutation_probability[4] => Reference{Real}[Reference{Real}(0.25)],
+                                       types_of_mutation_probability[5] => Reference{Real}[Reference{Real}(0.25)],
+                                       types_of_mutation_probability[6] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[7] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[8] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[9] => Reference{Real}[Reference{Real}(0.1)],
+                                      )
+    elseif typeof(mutation_probability) <: DataFrame
+      dataframe_columns = Symbol.(names(mutation_probability))
+      all([i in types_of_mutation_probability for i in dataframe_columns]) || throw(ArgumentError("Got invalid column names in the DataFrame mutation_probability, valid column names are $(types_of_mutation_probability)"))
+      all([i in dataframe_columns for i in types_of_mutation_probability]) || throw(ArgumentError("All types of mutation probability probabilities i.e. $(types_of_mutation_probability) are not mentioned in the input mutation_probability DataFrame"))
+      size(mutation_probability)[1] == 1 || throw(ArgumentError("mutation_probability DataFrames should be of only 1 row got $(sizeof(mutation_probability)[1]) rows"))
+      if all(typeof.(collect(mutation_probability[1,:])) .<: Reference{Real}) # do nothing
+      elseif all(typeof.(collect(mutation_probability[1,:])) .<: Real)
+        table = DataFrame()
+        for i in types_of_mutation_probability
+          table[:,i] = [Reference{Real}(mutation_probability[1,i])]
+        end
+        mutation_probability = table
+      else
+        throw(ArgumentError("Invalid values in mutation_probability DataFrame, should be either Reference{Real} or <:Real"))
+      end
+    elseif typeof(mutation_probability) <: Dict
+      dict_keys = keys(mutation_probability)
+      all([i in types_of_mutation_probability for i in dict_keys]) || throw(ArgumentError("Got invalid keys in the Dict mutation_probability, valid keys are $(types_of_mutation_probability)"))
+      all([i in dict_keys for i in types_of_mutation_probability]) || throw(ArgumentError("All types of mutation probability probabilities i.e. $(types_of_mutation_probability) are not mentioned in the input mutation_probability Dict"))
+      if typeof(mutation_probability[:no_mutation]) <: Reference
+        table = DataFrame()
+        for i in types_of_mutation_probability
+          table[:,i] = [mutation_probability[i]]
+        end
+        mutation_probability = table
+      else # Real
+        table = DataFrame()
+        for i in types_of_mutation_probability
+          table[:,i] = [Reference{Real}(mutation_probability[i])]
+        end
+        mutation_probability = table
+      end
+    else
+      throw(ArgumentError("Got invalid datatype i.e. $(typeof(mutation_probability)) for mutation_probability, mutation_probability should be a DataFrame of 1 row and $(types_of_mutation_probability) columns or a Dict of keys as column names."))
+    end
 
     Genome{NEAT}(n_inputs, n_outputs, super, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
   function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species_per_generation = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20,
 
-      population = Genome[], generation = 0, n_species = 1, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability = Matrix{Reference{Real}}(undef, 0,0), specie_info = nothing)
+      population = Genome[], generation = 0, n_species = 1, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
     (population_size > 0) || throw(ArgumentError("Invalid population_size $(population_size), should be > 0"))
     (isempty(population)) && (population = Vector{Genome}(undef, population_size))
-    _n_mutations = 0x8
-    if isempty(mutation_probability)
-      mutation_probability = Matrix{Reference{Real}}(undef, population_size,_n_mutations)
-      for i = eachrow(mutation_probability)
-        i[1] = Reference{Real}(1.0)
-        i[2] = Reference{Real}(1.0)
-        i[3] = Reference{Real}(0.25)
-        i[4] = Reference{Real}(0.25)
-        i[5] = Reference{Real}(0.1)
-        i[6] = Reference{Real}(0.1)
-        i[7] = Reference{Real}(0.1)
-        i[8] = Reference{Real}(0.1)
+
+    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node]
+    _n_mutations = length(types_of_mutation_probability)|>Unsigned
+    if isnothing(mutation_probability)
+      mutation_probability = DataFrame(types_of_mutation_probability[1] => [Reference{Real}(3) for i in 1:population_size],
+                                       types_of_mutation_probability[2] => [Reference{Real}(1) for i in 1:population_size],
+                                       types_of_mutation_probability[3] => [Reference{Real}(1) for i in 1:population_size],
+                                       types_of_mutation_probability[4] => [Reference{Real}(0.25) for i in 1:population_size],
+                                       types_of_mutation_probability[5] => [Reference{Real}(0.25) for i in 1:population_size],
+                                       types_of_mutation_probability[6] => [Reference{Real}(0.1) for i in 1:population_size],
+                                       types_of_mutation_probability[7] => [Reference{Real}(0.1) for i in 1:population_size],
+                                       types_of_mutation_probability[8] => [Reference{Real}(0.1) for i in 1:population_size],
+                                       types_of_mutation_probability[9] => [Reference{Real}(0.1) for i in 1:population_size],
+                                      )
+    elseif typeof(mutation_probability) <: DataFrame
+      dataframe_columns = Symbol.(names(mutation_probability))
+      all([i in types_of_mutation_probability for i in dataframe_columns]) || throw(ArgumentError("Got invalid column names in the DataFrame mutation_probability, valid column names are $(types_of_mutation_probability)"))
+      all([i in dataframe_columns for i in types_of_mutation_probability]) || throw(ArgumentError("All types of mutation probability probabilities i.e. $(types_of_mutation_probability) are not mentioned in the input mutation_probability DataFrame"))
+      if size(mutation_probability)[1] == 1
+        if all(typeof.(collect(mutation_probability[1,:])) .<: Real)
+          table = DataFrame()
+          for i in types_of_mutation_probability
+            table[:,i] = [Reference{Real}(mutation_probability[1,i]) for j in 1:population_size]
+          end
+          mutation_probability = table
+        else
+          throw(ArgumentError("Type of values of mutation_probability DataFrame of 1 row should be <:Real, instead got $(typeof(mutation_probability[1,1]))"))
+        end
+      elseif size(mutation_probability)[1] == population_size
+        if all(typeof.(collect(mutation_probability[1,:])) .<: Real)
+          table = DataFrame()
+          for i in types_of_mutation_probability
+            column = Reference{Real}[]
+            for j in mutation_probability[:,i]
+              push!(column, Reference{Real}(j))
+            end
+            table[:,i] = column
+          end
+          mutation_probability = table
+        elseif all(typeof.(collect(mutation_probability[1,:])) .<: Reference{Real}) # do nothing
+        else
+          throw(ArgumentError("Type of values of mutation_probability DataFrame of population_size($(population_size)) rows should be either <:Real or Reference{Real}, instead got $(typeof(mutation_probability[1,1]))"))
+        end
+      else
+        throw(ArgumentError("Number of rows in mutation_probability DataFrame should be either 1 or population_size $(population_size), instead got $(size(mutation_probability)[1]) rows"))
       end
-    elseif size(mutation_probability) == (1,_n_mutations) || size(mutation_probability) == (_n_mutations,)
-      temp_mutation_probability = Matrix{Reference{Real}}(undef, population_size,_n_mutations)
-      for i = eachrow(temp_mutation_probability)
-        i[1] = Reference{Real}(mutation_probability[1][])
-        i[2] = Reference{Real}(mutation_probability[2][])
-        i[3] = Reference{Real}(mutation_probability[3][])
-        i[4] = Reference{Real}(mutation_probability[4][])
-        i[5] = Reference{Real}(mutation_probability[5][])
-        i[6] = Reference{Real}(mutation_probability[6][])
-        i[7] = Reference{Real}(mutation_probability[7][])
-        i[8] = Reference{Real}(mutation_probability[8][])
+    elseif typeof(mutation_probability) <: Dict
+      dict_keys = keys(mutation_probability)
+      all([i in types_of_mutation_probability for i in dict_keys]) || throw(ArgumentError("Got invalid keys in the Dict mutation_probability, valid keys are $(types_of_mutation_probability)"))
+      all([i in dict_keys for i in types_of_mutation_probability]) || throw(ArgumentError("All types of mutation probability probabilities i.e. $(types_of_mutation_probability) are not mentioned in the input mutation_probability Dict"))
+      if typeof(mutation_probability[:no_mutation]) <: Real
+        table = DataFrame()
+        for i in types_of_mutation_probability
+          table[:,i] = [Reference{Real}(mutation_probability[i]) for j in 1:population_size]
+        end
+        mutation_probability = table
+      elseif typeof(mutation_probability[:no_mutation]) == Vector{Reference{Real}}
+        table = DataFrame()
+        for i in types_of_mutation_probability
+          table[:,i] = mutation_probability[i]
+        end
+        mutation_probability = table
+      else # Vector{<:Real}
+        table = DataFrame()
+        for i in types_of_mutation_probability
+          column = Reference{Real}[]
+          for j in mutation_probability[i]
+            push!(column, Reference{Real}(j))
+          end
+          table[:,i] = column
+        end
+        mutation_probability = table
       end
-      mutation_probability = temp_mutation_probability
     else
-      throw(ArgumentError("mutation_probability should be of type Matrix{Reference{Real}} and of size ($(population_size), $(_n_mutations)) or (1, $(_n_mutations)) or ($(_n_mutations),)"))
+      throw(ArgumentError("Got invalid datatype i.e. $(typeof(mutation_probability)) for mutation_probability, mutation_probability should be a DataFrame of 1 row or population_size($(population_size)) rows and $(types_of_mutation_probability) columns or a Dict of keys as column names."))
     end
     isnothing(specie_info) && (specie_info = DataFrame(specie = Unsigned[],
                                                        alive = Bool[],
@@ -223,7 +318,7 @@ module NEATJulia
   end
   function Init(x::NEAT)
     for i = 1:x.population_size
-      x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i], mutation_probability = x.mutation_probability[i,:])
+      x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i], mutation_probability = DataFrame(x.mutation_probability[i,:]))
       Init(x.population[i])
     end
     for i = 1:x.n_inputs+x.n_outputs
@@ -258,8 +353,8 @@ module NEATJulia
     ret.ID = 0
     ret.fitness[] = -Inf
     ret.input = x.input
-    for i = 1:length(ret.mutation_probability)
-      ret.mutation_probability[i][] = (parent1.mutation_probability[i][] + parent2.mutation_probability[i][])/2
+    for i = 1:size(ret.mutation_probability)[2]
+      ret.mutation_probability[1,i][] = (parent1.mutation_probability[1,i][] + parent2.mutation_probability[1,i][])/2
     end
     for i in ret.output
       i[] = 0.0
@@ -268,27 +363,35 @@ module NEATJulia
     return ret
   end
 
-  function Mutation(x::Genome)
-    mutation = sample(collect(1:x._n_mutations), Weights(GetMutationProbability(x)))
+  function _custom_weights(x::Vector{T}) where T<:Real
+    x[x .== Inf] .= floatmax(Float64)
+    x[x .== -Inf] .= -floatmax(Float64)
+    return Weights(x)
+  end
 
-    if mutation == 1 # update weight
+  function Mutation(x::Genome)
+    mutation = sample(collect(1:x._n_mutations), _custom_weights(collect(GetMutationProbability(x)[1,:])))
+
+    if mutation == 1 # no mutation
+      return 1
+    elseif mutation == 2 # change weight
       genome_info = GetGenomeInfo(x, simple = true)
       connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
       if isempty(connections)
-        return 1
+        return 2
       end
       connections = [x.genome[i] for i in connections]
       random_connection = rand(connections)
       random_connection.weight = x.super.min_weight + (x.super.max_weight - x.super.min_weight)*rand()
-      return 1, random_connection.GIN
-    elseif mutation == 2 # update bias
+      return 2, random_connection.GIN
+    elseif mutation == 3 # change bias
       genome_info = GetGenomeInfo(x, simple = true)
       nodes = genome_info[(genome_info[:,:type].<:HiddenNode).||(genome_info[:,:type].<:OutputNode),:GIN]
       nodes = [x.genome[i] for i in nodes]
       random_node = rand(nodes)
       random_node.bias = x.super.min_bias + (x.super.max_bias - x.super.min_bias)*rand()
-      return 2, random_node.GIN
-    elseif mutation <= 3 # add connection
+      return 3, random_node.GIN
+    elseif mutation == 4 # add connection
       for itr = 1:3
         start_layer = rand(1:length(x.layers)-1)
         start_node = rand(x.layers[start_layer])
@@ -301,20 +404,20 @@ module NEATJulia
             GIN = x.super.GIN[end,1]+0x1
             x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
             x.super.GIN = vcat(x.super.GIN, [GIN "Connection" start_node.GIN end_node.GIN])
-            return 3, GIN, "new"
+            return 4, GIN, "new"
           else
             GIN = x.super.GIN[idx,1]
             x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
-            return 3, GIN, "old"
+            return 4, GIN, "old"
           end
         end
       end
-      return 3
-    elseif mutation <= 4 # add node
+      return 4
+    elseif mutation == 5 # add node
       genome_info = GetGenomeInfo(x, simple = true)
       connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
       if isempty(connections)
-        return 4
+        return 5
       end
       connections = [x.genome[i] for i in connections]
       # get a random connection
@@ -376,47 +479,47 @@ module NEATJulia
         insert!(x.layers, Unsigned(ceil(new_node_layer)), [new_node])
       end
 
-      return 4, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
-    elseif mutation <= 5 # disable connection
+      return 5, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
+    elseif mutation == 6 # disable connection
       genome_info = GetGenomeInfo(x, simple = true)
       connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
       if isempty(connections)
-        return 5
+        return 6
       end
       connections = [x.genome[i] for i in connections]
       random_connection = rand(connections)
       random_connection.enabled = false
-      return 5, random_connection.GIN
-    elseif mutation == 6 # disable node
+      return 6, random_connection.GIN
+    elseif mutation == 7 # disable node
       genome_info = GetGenomeInfo(x, simple = true)
       hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode),:GIN]
       if isempty(hidden_nodes)
-        return 6
+        return 7
       end
       hidden_nodes = [x.genome[i] for i in hidden_nodes]
       random_hidden_node = rand(hidden_nodes)
       random_hidden_node.enabled = false
-      return 6, random_hidden_node.GIN
-    elseif mutation == 7 # enable connection
+      return 7, random_hidden_node.GIN
+    elseif mutation == 8 # enable connection
       genome_info = GetGenomeInfo(x)
       connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==false),:GIN]
       if isempty(connections)
-        return 7
+        return 8
       end
       connections = [x.genome[i] for i in connections]
       random_connection = rand(connections)
       random_connection.enabled = true
-      return 7, connection.GIN
-    elseif mutation == 8 # enable node
+      return 8, connection.GIN
+    elseif mutation == 9 # enable node
       genome_info = GetGenomeInfo(x)
       hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==false),:GIN]
       if isempty(hidden_nodes)
-        return 8
+        return 9
       end
       hidden_nodes = [x.genome[i] for i in hidden_nodes]
       random_hidden_node = rand(hidden_nodes)
       random_hidden_node.enabled = true
-      return 8, random_hidden_node.GIN
+      return 9, random_hidden_node.GIN
     end
   end
 
@@ -546,11 +649,14 @@ module NEATJulia
         bad_individuals[i] = x.species[i][n_individuals_considered_best+1:end]
       end
 
+      for i = 1:length(x.population)
+        x.population[i].ID = i
+      end
       for i = length(x.population)+1:x.population_size
         crossover_probability = append!(x.crossover_probability[1:3], size(GetSpecieInfo(x, simple=true))[1]>1 ? x.crossover_probability[4:6] : [0,0,0])
-        crossover = sample([1,2,3,4,5,6], Weights(crossover_probability))
+        crossover = sample([1,2,3,4,5,6], _custom_weights(crossover_probability))
         if crossover == 1 # intraspecie good and good
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
           specie2 = specie1
 
           parent1 = rand(good_individuals[specie1])
@@ -558,7 +664,7 @@ module NEATJulia
 
           child = Crossover(parent1, parent2)
         elseif crossover == 2 # intraspecie good and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
           specie2 = specie1
 
           parent1 = rand(good_individuals[specie1])
@@ -566,7 +672,7 @@ module NEATJulia
 
           child = Crossover(parent1, parent2)
         elseif crossover == 3 # intraspecie bad and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
           specie2 = specie1
 
           parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
@@ -574,35 +680,46 @@ module NEATJulia
 
           child = Crossover(parent1, parent2)
         elseif crossover == 4 # interspecie good and good
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
 
           parent1 = rand(good_individuals[specie1])
           parent2 = rand(good_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         elseif crossover == 5 # interspecie good and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
 
           parent1 = rand(good_individuals[specie1])
           parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         else # interspecie bad and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], Weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
 
           parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
           parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         end
+        child.ID = i
         
         if mutate
-          Mutation(child)
+          println(child.ID)
+          println(Mutation(child))
+          println()
         end
         push!(x.population, child)
+      end
+      x.mutation_probability = DataFrame()
+      x.fitness = Reference{Real}[]
+      x.output = Matrix{Reference{Real}}(undef, x.population_size, x.n_outputs)
+      for (i,j) in zip(x.population, 1:x.population_size)
+        append!(x.mutation_probability, i.mutation_probability)
+        push!(x.fitness, i.fitness)
+        x.output[j,:] .= i.output
       end
     end
 
@@ -696,6 +813,18 @@ module NEATJulia
   function GetOutput(x::Genome)
     return [i[] for i in x.output]
   end
+  function GetOutput(x::NEAT, idx::Integer)
+    idx = Unsigned(idx)
+    GetOutput(x.population[idx])
+  end
+  function GetOutput(x::NEAT, idx::Union{Vector{T}, OrdinalRange{T,T}}) where T<:Integer
+    ret = Matrix{Union{Real, Nothing}}(undef, 0,x.n_outputs)
+    for i in idx
+      i = Unsigned(i)
+      ret = vcat(ret, GetOutput(x.population[i]))
+    end
+    return ret
+  end
   function GetOutput(x::NEAT)
     ret = Matrix{Union{Real, Nothing}}(undef, x.population_size,x.n_outputs)
     for i = 1:length(x.output)
@@ -725,41 +854,61 @@ module NEATJulia
   end
 
   function GetMutationProbability(x::Genome)
-    return [i[] for i in x.mutation_probability]
-  end
-  function GetMutationProbability(x::NEAT)
-    ret = Matrix{Union{Nothing, Real}}(undef, x.population_size,x._n_mutations)
-    for i = 1:length(x.mutation_probability)
-      ret[i] = x.mutation_probability[i][]
+    ret = DataFrame()
+    for i in Symbol.(names(x.mutation_probability))
+      ret[:,i] = Real[x.mutation_probability[1,i][]]
     end
-
     return ret
   end
-
-  function SetMutationProbability!(x::Genome, args::Real...)
-    if length(args) != x._n_mutations
-      throw(ArgumentError("Invalid number of probabilities expected $(x._n_mutations), instead got $(length(args))"))
+  function GetMutationProbability(x::NEAT, idx::Union{T, Vector{T}, OrdinalRange{T,T}}) where T<:Integer
+    ret = DataFrame()
+    for i in Symbol.(names(x.mutation_probability))
+      ret[:,i] = Real[]
     end
-    if any(args.<0.0)
-      throw(ArgumentError("Probabilities should be greater >= 0.0, instead got a negative number"))
-    end
-
-    for (i,j) in zip(x.mutation_probability, args)
-      i[] = j
-    end
-  end
-  function SetMutationProbability!(x::Genome, y::Vector{Real})
-    SetMutationProbability!(x, y...)
-  end
-  function SetMutationProbability!(x::NEAT, idx::Union{Unsigned, Vector{Unsigned}, OrdinalRange{Unsigned, Unsigned}}, args::Real...)
     for i in idx
-      SetMutationProbability!(x.population[i], args...)
+      i = Unsigned(i)
+      append!(ret, GetMutationProbability(x.population[i]))
+    end
+    return ret
+  end
+  function GetMutationProbability(x::NEAT)
+    return GetMutationProbability(x, 1:x.population_size)
+  end
+
+  function SetMutationProbability!(x::Genome, y::Dict{Symbol, T}) where T<:Real
+    types_of_mutation_probability = Symbol.(names(x.mutation_probability))
+    all([i in types_of_mutation_probability for i in keys(y)]) || throw(ArgumentError("All keys in input Dict should be from $(types_of_mutation_probability)"))
+
+    for i in keys(y)
+      x.mutation_probability[1,i][] = y[i]
     end
   end
-  function SetMutationProbability!(x::NEAT, idx::Union{Unsigned, Vector{Unsigned}, OrdinalRange{Unsigned, Unsigned}}, y::Vector{Real})
-    for i in idx
-      SetMutationProbability!(x.population[i], y...)
+  function SetMutationProbability!(x::Genome, y::DataFrame)
+    types_of_mutation_probability = Symbol.(names(x.mutation_probability))
+    all([i in types_of_mutation_probability for i in Symbol.(names(y))]) || throw(ArgumentError("All columns in input DataFrame should be from $(types_of_mutation_probability)"))
+    all(typeof.(collect(y[1,:])) .<: Real) || throw(ArgumentError("All values in the input DataFrame should be <: Real"))
+
+    for i in Symbol.(names(y))
+      x.mutation_probability[1,i][] = y[1,i]
     end
+  end
+  function SetMutationProbability!(x::NEAT, idx::Union{T, Vector{T}, OrdinalRange{T,T}}, y::Dict{Symbol, U}) where {T<:Integer, U<:Real}
+    for i in idx
+      i = Unsigned.(i)
+      SetMutationProbability!(x.population[i], y)
+    end
+  end
+  function SetMutationProbability!(x::NEAT, idx::Union{T, Vector{T}, OrdinalRange{T,T}}, y::DataFrame) where T<:Integer
+    for i in idx
+      i = Unsigned.(i)
+      SetMutationProbability!(x.population[i], y)
+    end
+  end
+  function SetMutationProbability!(x::NEAT, y::Dict{Symbol, T}) where T<:Real
+    SetMutationProbability!(x, 1:x.population_size, y)
+  end
+  function SetMutationProbability!(x::NEAT, y::DataFrame)
+    SetMutationProbability!(x, 1:x.population_size, y)
   end
 
   function GetLayers(x::Genome; simple::Bool = true)
@@ -771,10 +920,22 @@ module NEATJulia
 
     return ret
   end
+  function GetLayers(x::NEAT, idx::Integer; simple::Bool = true)
+    idx = Unsigned(idx)
+    GetLayers(x.population[idx], simple = simple)
+  end
+  function GetLayers(x::NEAT, idx::Union{Vector{T}, OrdinalRange{T,T}}; simple::Bool = true) where T<:Integer
+    ret = Vector{Vector{Unsigned}}[]
+    for i in idx
+      i = Unsigned(i)
+      push!(ret, GetLayers(x.population[i], simple = simple))
+    end
+    return = ret
+  end
   function GetLayers(x::NEAT; simple::Bool = true)
     ret = Vector{Vector{Unsigned}}[]
     for i in x.population
-      push!(ret, GetLayers(i, simple))
+      push!(ret, GetLayers(i, simple = simple))
     end
 
     return ret
@@ -782,6 +943,16 @@ module NEATJulia
 
   function RunFitness(x::Genome)
     x.fitness[] = x.fitness_function[](GetOutput(x), GetExpectedOutput(x))
+  end
+  function RunFitness(x::NEAT, idx::Integer)
+    idx = Unsigned(idx)
+    RunFitness(x.population[idx])
+  end
+  function RunFitness(x::NEAT, idx::Union{Vector{T}, OrdinalRange{T,T}}) where T<:Integer
+    for i in idx
+      i = Unsigned(i)
+      RunFitness(x.population[i])
+    end
   end
   function RunFitness(x::NEAT)
     for i in x.population
@@ -791,6 +962,18 @@ module NEATJulia
 
   function GetFitness(x::Genome)
     return x.fitness[]
+  end
+  function GetFitness(x::NEAT, idx::Integer)
+    idx = Unsigned(idx)
+    GetFitness(x.population[idx])
+  end
+  function GetFitness(x::NEAT, idx::Union{Vector{T}, OrdinalRange{T,T}}) where T<:Integer
+    ret = Real[]
+    for i in idx
+      i = Unsigned(i)
+      push!(ret, GetFitness(x, i))
+    end
+    return ret
   end
   function GetFitness(x::NEAT)
     return [GetFitness(i) for i in x.population]
@@ -811,6 +994,9 @@ module NEATJulia
                     out_node = Vector{Union{Nothing, Unsigned}}(),
                     enabled = Vector{Union{Nothing, Bool}}(),)
     for i in sort(collect(keys(x.genome)))
+      if (simple && !x.genome[i].enabled)
+        continue
+      end
       temp = []
       push!(temp, x.genome[i].GIN)
       if typeof(x.genome[i])<:Node
@@ -827,11 +1013,26 @@ module NEATJulia
       push!(ret, temp)
     end
 
-    if simple
-      ret = ret[ret[:,5].!=false,:]
-    end
+    # if simple
+    #   ret = ret[ret[:,5].!=false,:]
+    # end
 
     return ret
+  end
+  function GetGenomeInfo(x::NEAT, idx::Integer; simple::Bool = false)
+    idx = Unsigned(idx)
+    GetGenomeInfo(x.population[idx], simple = simple)
+  end
+  function GetGenomeInfo(x::NEAT, idx::Union{Vector{T}, OrdinalRange{T,T}}; simple::Bool = false) where T<:Integer
+    ret = DataFrame[]
+    for i in idx
+      i = Unsigned(i)
+      push!(ret, GetGenomeInfo(x.population[i], simple = simple))
+    end
+    return ret
+  end
+  function GetGenomeInfo(x::NEAT; simple = false)
+    GetGenomeInfo(x, 1:x.population_size, simple = simple)
   end
 
   function GetSpecieInfo(x::NEAT; simple::Bool = true)
