@@ -2,7 +2,7 @@
 module NEATJulia
   using DataFrames, StatsBase
   include("Reference.jl")
-  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability!, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability!, GetCrossoverProbability
+  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability!, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability!, GetCrossoverProbability, GetGIN
 
   abstract type Node end
 
@@ -96,7 +96,7 @@ module NEATJulia
     population::Vector{Genome}
     generation::Unsigned
     n_species::Unsigned
-    GIN::Matrix{Union{Unsigned, String, Nothing}} # list of all Global Innovation Number
+    GIN::DataFrame # list of all Global Innovation Number
     input::Vector{Reference{Real}}
     best_genome::Union{Nothing, Genome}
     output::Matrix{Reference{Real}}
@@ -194,7 +194,7 @@ module NEATJulia
   end
   function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species_per_generation = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20,
 
-      population = Genome[], generation = 0, n_species = 1, GIN = Matrix{Union{Unsigned, String, Nothing}}(undef, 0,4), best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
+      population = Genome[], generation = 0, n_species = 1, best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -294,6 +294,11 @@ module NEATJulia
     end
     fitness = [Reference{Real}(-Inf) for i = 1:population_size]
     species = Dict{Unsigned, Vector{Genome}}()
+    GIN = DataFrame(GIN = Unsigned[],
+                      type = Type[],
+                      in_node = Vector{Union{Nothing, Unsigned}}(),
+                      out_node = Vector{Union{Nothing, Unsigned}}(),
+                     )
 
     NEAT(n_inputs, n_outputs, population_size, max_generation, max_species_per_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, _n_mutations,
 
@@ -321,8 +326,11 @@ module NEATJulia
       x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i], mutation_probability = DataFrame(x.mutation_probability[i,:]))
       Init(x.population[i])
     end
-    for i = 1:x.n_inputs+x.n_outputs
-      x.GIN = vcat(x.GIN, [Unsigned(i) "Node" nothing nothing])
+    for i = 1:x.n_inputs
+      push!(x.GIN, [Unsigned(i), InputNode, nothing, nothing])
+    end
+    for i = 1:x.n_outputs
+      push!(x.GIN, [Unsigned(x.n_inputs+i), OutputNode, nothing, nothing])
     end
     x.species[0x1] = x.population
     push!(x.specie_info, [0x1, true, 0x1, 0x0, -Inf, -Inf, -Inf, 0x1, 0x0, -Inf])
@@ -399,11 +407,11 @@ module NEATJulia
         end_node = rand(x.layers[end_layer])
         next_nodes_of_start_node = [i.out_node for i in start_node.out_connections]
         if !(end_node in next_nodes_of_start_node)
-          idx = findfirst(x.super.GIN[:,2].=="Connection" .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
+          idx = findfirst(x.super.GIN[:,2].<:Connection .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
           if isnothing(idx)
             GIN = x.super.GIN[end,1]+0x1
             x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
-            x.super.GIN = vcat(x.super.GIN, [GIN "Connection" start_node.GIN end_node.GIN])
+            push!(x.super.GIN, [GIN, Connection, start_node.GIN, end_node.GIN])
             return 4, GIN, "new"
           else
             GIN = x.super.GIN[idx,1]
@@ -457,17 +465,17 @@ module NEATJulia
       GIN = x.super.GIN[end,1]+0x1
       new_node = HiddenNode(GIN = GIN, super = x)
       x.genome[GIN] = new_node
-      x.super.GIN = vcat(x.super.GIN, [GIN "Node" nothing nothing])
+      push!(x.super.GIN, [GIN, HiddenNode, nothing, nothing])
 
       GIN = GIN+0x1
       new_node_in_connection = Connection(random_connection.in_node, new_node, GIN = GIN, super = x, weight = 1)
       x.genome[GIN] = new_node_in_connection
-      x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_in_connection.in_node.GIN new_node_in_connection.out_node.GIN])
+      push!(x.super.GIN, [GIN, Connection, new_node_in_connection.in_node.GIN, new_node_in_connection.out_node.GIN])
 
       GIN = GIN+0x1
       new_node_out_connection = Connection(new_node, random_connection.out_node, GIN = GIN, super = x, weight = random_connection.weight)
       x.genome[GIN] = new_node_out_connection
-      x.super.GIN = vcat(x.super.GIN, [GIN "Connection" new_node_out_connection.in_node.GIN new_node_out_connection.out_node.GIN])
+      push!(x.super.GIN, [GIN, Connection, new_node_out_connection.in_node.GIN, new_node_out_connection.out_node.GIN])
 
       random_connection.enabled = false
 
@@ -930,7 +938,7 @@ module NEATJulia
       i = Unsigned(i)
       push!(ret, GetLayers(x.population[i], simple = simple))
     end
-    return = ret
+    return ret
   end
   function GetLayers(x::NEAT; simple::Bool = true)
     ret = Vector{Vector{Unsigned}}[]
@@ -1061,6 +1069,10 @@ module NEATJulia
 
   function GetCrossoverProbability(x::NEAT)
     return copy(x.crossover_probability)
+  end
+
+  function GetGIN(x::NEAT)
+    return copy(x.GIN)
   end
 
   function Relu(x::Real)
