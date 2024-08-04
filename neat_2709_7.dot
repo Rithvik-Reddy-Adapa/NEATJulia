@@ -1,0 +1,45 @@
+digraph {
+	rankdir=LR;
+	node [shape=circle];
+	1->4[color=red,label="11,  0.9",penwidth=1.0];
+	1->12[color=red,label="13,  1.083",penwidth=1.0];
+	1->193[color=red,label="194,  1.0",penwidth=1.0];
+	1->2121[color=green,label="2122,  1.002",penwidth=1.0];
+	1 [color=green]
+	2 [color=green]
+	3 [color=green]
+	{rank=same; 1, 2, 3}
+	2121->193[color=green,label="2123,  1.0",penwidth=1.0];
+	2121 [color=green]
+	{rank=same; 2121}
+	193->12[color=green,label="195,  1.083",penwidth=1.0];
+	193->6[color=red,label="249,  0.085",penwidth=1.0];
+	193->2112[color=green,label="2113,  1.0",penwidth=1.0];
+	193->355[color=red,label="410,  0.002",penwidth=1.0];
+	193 [color=green]
+	{rank=same; 193}
+	12->4[color=red,label="14,  0.9",penwidth=1.0];
+	12->6[color=red,label="44,  0.168",penwidth=1.0];
+	12->5[color=red,label="43,  0.064",penwidth=1.0];
+	12->355[color=green,label="356,  1.0",penwidth=1.0];
+	12->906[color=green,label="907,  1.0",penwidth=1.0];
+	12 [color=green]
+	{rank=same; 12}
+	906->4[color=green,label="908,  0.9",penwidth=1.0];
+	906 [color=green]
+	2112->6[color=red,label="2114,  0.085",penwidth=1.0];
+	2112->2118[color=green,label="2119,  1.0",penwidth=1.0];
+	2112 [color=green]
+	{rank=same; 906, 2112}
+	355->5[color=green,label="357,  0.063",penwidth=1.0];
+	355->6[color=green,label="383,  0.004",penwidth=1.0];
+	355 [color=green]
+	{rank=same; 355}
+	2118->6[color=green,label="2120,  0.085",penwidth=1.0];
+	2118 [color=green]
+	{rank=same; 2118}
+	4 [color=green]
+	5 [color=green]
+	6 [color=green]
+	{rank=same; 4, 5, 6}
+}

@@ -1,8 +1,8 @@
 
 module NEATJulia
-  using DataFrames, StatsBase
+  using DataFrames, StatsBase, JLD2
   include("Reference.jl")
-  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability!, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability!, GetCrossoverProbability, GetGIN
+  export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability!, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability!, GetCrossoverProbability, GetGIN, GetGenomeDistance, Load, Save
 
   abstract type Node end
 
@@ -78,7 +78,6 @@ module NEATJulia
     n_outputs::Unsigned
     population_size::Unsigned
     max_generation::Unsigned
-    max_species_per_generation::Unsigned
     RNN_enabled::Bool
     threshold_fitness::Real
     n_genomes_to_pass::Unsigned # number of geneomes to pass fitness test for NEAT to pass
@@ -91,6 +90,8 @@ module NEATJulia
     n_individuals_to_retain::Real # number of individuals to retain unchanged for next generation of a specie. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
     crossover_probability::Vector{Real} # [intraspecie good and good, intraspecie good and bad, intraspecie bad and bad, interspecie good and good, interspecie good and bad, interspecie bad and bad]
     max_specie_stagnation::Unsigned
+    distance_parameters::Vector{Real}
+    threshold_distance::Real
     const _n_mutations::Unsigned
 
     population::Vector{Genome}
@@ -192,7 +193,7 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, super, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, max_species_per_generation = typemax(UInt64), RNN_enabled = false, threshold_fitness = 1.0, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20,
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.01, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 5,
 
       population = Genome[], generation = 0, n_species = 1, best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
@@ -300,7 +301,7 @@ module NEATJulia
                       out_node = Vector{Union{Nothing, Unsigned}}(),
                      )
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, max_species_per_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, _n_mutations,
+    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, _n_mutations,
 
          population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info)
   end
@@ -332,7 +333,7 @@ module NEATJulia
     for i = 1:x.n_outputs
       push!(x.GIN, [Unsigned(x.n_inputs+i), OutputNode, nothing, nothing])
     end
-    x.species[0x1] = x.population
+    x.species[0x1] = [i for i in x.population]
     push!(x.specie_info, [0x1, true, 0x1, 0x0, -Inf, -Inf, -Inf, 0x1, 0x0, -Inf])
     return
   end
@@ -361,6 +362,7 @@ module NEATJulia
     ret.ID = 0
     ret.fitness[] = -Inf
     ret.input = x.input
+    ret.specie = 0x0
     for i = 1:size(ret.mutation_probability)[2]
       ret.mutation_probability[1,i][] = (parent1.mutation_probability[1,i][] + parent2.mutation_probability[1,i][])/2
     end
@@ -517,7 +519,7 @@ module NEATJulia
       connections = [x.genome[i] for i in connections]
       random_connection = rand(connections)
       random_connection.enabled = true
-      return 8, connection.GIN
+      return 8, random_connection.GIN
     elseif mutation == 9 # enable node
       genome_info = GetGenomeInfo(x)
       hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==false),:GIN]
@@ -529,6 +531,62 @@ module NEATJulia
       random_hidden_node.enabled = true
       return 9, random_hidden_node.GIN
     end
+  end
+
+  function Speciation(x::NEAT)
+    new_species = Dict{Unsigned, Vector{Genome}}()
+
+    children = Genome[]
+    for i in x.population
+      if i.specie > 0
+        if haskey(new_species, i.specie)
+          push!(new_species[i.specie], i)
+        else
+          new_species[i.specie] = Genome[i]
+        end
+      else
+        push!(children, i)
+      end
+    end
+
+    for i in children
+      selected_specie::Unsigned = 0
+      best_distance::Real = Inf
+      for j in keys(x.species)
+        distance = GetGenomeDistance(i, x.species[j][1], x.distance_parameters)
+        if distance <= x.threshold_distance && distance < best_distance
+          best_distance = distance
+          selected_specie = j
+        end
+      end
+      if selected_specie == 0
+        for j in keys(new_species)
+          distance::Real = GetGenomeDistance(i, new_species[j][1], x.distance_parameters)
+          if distance <= x.threshold_distance && distance < best_distance
+            best_distance = distance
+            selected_specie = j
+          end
+        end
+      end
+
+      if selected_specie != 0
+        if haskey(new_species, selected_specie)
+          push!(new_species[selected_specie], i)
+        else
+          new_species[selected_specie] = Genome[i]
+          x.specie_info[selected_specie, :last_improved_generation] = x.generation
+        end
+        x.specie_info[selected_specie, :alive] = true
+      else
+        new_specie::Unsigned = x.specie_info[end,:specie] + 0x1
+        push!(x.specie_info, [new_specie, true, x.generation+0x1, 0x0, -Inf, -Inf, -Inf, 0x0, x.generation, -Inf])
+        new_species[new_specie] = Genome[i]
+      end
+    end
+    
+    x.species = new_species
+
+    return nothing
   end
 
   function Run(x::InputNode)
@@ -601,11 +659,31 @@ module NEATJulia
     end
   end
   function Run(x::NEAT; evaluate::Bool = false, crossover::Bool = false, mutate::Bool = false, generation::Bool = false)
+    passed_genomes = getindex.(getproperty.(x.population, :fitness)) .>= x.threshold_fitness
+    n_passed = sum(passed_genomes)
+    if n_passed >= x.n_genomes_to_pass
+      @info "!! Congratulations, NEAT terminated\n!! $(n_passed) genomes have reached the threshold fitness\n!! Passed genomes = $(findall(passed_genomes))"
+      return true
+    elseif x.generation >= x.max_generation
+      @info "NEAT terminated: reached maximum generation"
+      return false
+    end
+
     mutate = generation ? true : mutate
     crossover = mutate ? true : crossover
     evaluate = crossover ? true : evaluate
     for i in x.population
       Run(i, evaluate)
+    end
+
+    passed_genomes = getindex.(getproperty.(x.population, :fitness)) .>= x.threshold_fitness
+    n_passed = sum(passed_genomes)
+    if n_passed >= x.n_genomes_to_pass
+      @info "!! Congratulations, NEAT terminated\n!! $(n_passed) genomes have reached the threshold fitness\n!! Passesd genomes = $(findall(passed_genomes))"
+      return true
+    elseif x.generation >= x.max_generation
+      @info "NEAT terminated: reached maximum generation"
+      return false
     end
 
     if crossover
@@ -617,8 +695,8 @@ module NEATJulia
         idx = sortperm(GetFitness.(x.species[i]), rev = true)
         x.species[i] = x.species[i][idx]
 
-        x.specie_info[i,:minimum_fitness] = x.species[i][idx[end]].fitness[]
-        x.specie_info[i,:maximum_fitness] = x.species[i][idx[1]].fitness[]
+        x.specie_info[i,:minimum_fitness] = x.species[i][end].fitness[]
+        x.specie_info[i,:maximum_fitness] = x.species[i][1].fitness[]
         x.specie_info[i,:mean_fitness] = mean(GetFitness.(x.species[i]))
         if (x.specie_info[i,:last_highest_fitness] < x.specie_info[i,:mean_fitness])
           x.specie_info[i,:last_highest_fitness] = x.specie_info[i,:mean_fitness]
@@ -656,6 +734,8 @@ module NEATJulia
         good_individuals[i] = x.species[i][1:n_individuals_considered_best]
         bad_individuals[i] = x.species[i][n_individuals_considered_best+1:end]
       end
+      best_fitness_specie = argmax(x.specie_info[:,:mean_fitness])
+      x.specie_info[best_fitness_specie,:last_topped_generation] = x.generation
 
       for i = 1:length(x.population)
         x.population[i].ID = i
@@ -715,9 +795,7 @@ module NEATJulia
         child.ID = i
         
         if mutate
-          println(child.ID)
-          println(Mutation(child))
-          println()
+          Mutation(child)
         end
         push!(x.population, child)
       end
@@ -732,6 +810,8 @@ module NEATJulia
     end
 
     if generation
+      Speciation(x)
+      x.generation += 0x1
     end
 
   end
@@ -802,6 +882,12 @@ module NEATJulia
     end
 
     return graphviz_code
+  end
+  function Show(x::NEAT, idx::Union{Integer, Vector{Integer}, OrdinalRange{Integer, Integer}}; directed::Bool = true, rankdir_LR::Bool = true, connection_label::Bool = true, pen_width::Real = 1.0, export_type::String = "svg", simple::Bool = true)
+    for i in idx
+      i = Unsigned(i)
+      Show(x.population[i], directed = directed, rankdir_LR = rankdir_LR, connection_label = connection_label, pen_width = pen_width, export_type = export_type, simple = simple)
+    end
   end
 
   function SetInput!(x::Union{NEAT, Genome}, args::Real...)
@@ -1075,12 +1161,65 @@ module NEATJulia
     return copy(x.GIN)
   end
 
+  function GetGenomeDistance(x::Genome, y::Genome, z::Vector{T}) where T<:Real
+    (length(z)==3) || throw(ArgumentError("Input vector should of length 3, instead got of length $(length(z))"))
+    x_genome_info = GetGenomeInfo(x)
+    y_genome_info = GetGenomeInfo(y)
+
+    max_GIN = max(x_genome_info[end,:GIN], y_genome_info[end,:GIN])
+    x_GIN = [i in x_genome_info[:,:GIN] ? true : false for i = 1:max_GIN]
+    y_GIN = [i in y_genome_info[:,:GIN] ? true : false for i = 1:max_GIN]
+    max_common_GIN_index = findlast(x_GIN .&& y_GIN)
+
+    n_disjoint = sum(xor.(x_GIN[1:max_common_GIN_index], y_GIN[1:max_common_GIN_index]))
+    n_excess = sum(xor.(x_GIN[max_common_GIN_index:end], y_GIN[max_common_GIN_index:end]))
+
+    weight_difference = Real[]
+    for i = 1:max_common_GIN_index
+      if x_GIN[i] && y_GIN[i] && typeof(x.genome[i])<:Connection
+        push!(weight_difference, abs(x.genome[i].weight-y.genome[i].weight))
+      end
+    end
+    mean_weight_difference = mean(weight_difference)
+    if isnan(mean_weight_difference)
+      mean_weight_difference = 0
+    end
+
+    N = max(size(x_genome_info,1), size(x_genome_info,1))
+    ret = sum( [n_disjoint, n_excess, mean_weight_difference] .* z ./ [N, N, 1] )
+
+    return ret
+  end
+
   function Relu(x::Real)
     return max(x, 0.0)
   end
    
   function Sum_Abs_Diferrence(output::Vector{<:Real}, expected_output::Vector{<:Real})
     fitness = -sum(abs.(output .- expected_output))
+  end
+
+  function Save(x::NEAT, filename::Union{Nothing, String} = nothing)
+    isnothing(filename) && (filename = "NEAT_$(x.generation).jld2")
+    jldsave(filename; x)
+  end
+  function Save(x::NEAT, idx::Integer, filename::Union{Nothing, String} = nothing)
+    idx = Unsigned(idx)
+    Save(x.population[idx], filename)
+  end
+  function Save(x::Genome, filename::Union{Nothing, String} = nothing)
+    isnothing(filename) && (filename = "Genome_$(x.super.generation)_$(x.ID).jld2")
+    jldsave(filename; x)
+  end
+
+  function Load(filename::String)
+    ret = IdDict()
+    jldopen(filename, "r") do f
+      for i in keys(f)
+        ret[i] = f[i]
+      end
+    end
+    return ret
   end
 end
 ;
