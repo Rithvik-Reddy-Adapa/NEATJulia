@@ -1,8 +1,0 @@
-digraph {
-	rankdir=LR;
-	node [shape=circle];
-	1 [color=green]
-	{rank=same; 1}
-	2 [color=green]
-	{rank=same; 2}
-}

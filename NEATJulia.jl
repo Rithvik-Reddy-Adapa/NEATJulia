@@ -809,7 +809,7 @@ module NEATJulia
         child.ID = i
         
         if mutate
-          Mutation(child)|>println
+          Mutation(child)
         end
         push!(new_population, child)
       end
