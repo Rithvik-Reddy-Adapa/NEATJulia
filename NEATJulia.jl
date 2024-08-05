@@ -193,7 +193,7 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, super, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.01, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 5,
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 5,
 
       population = Genome[], generation = 0, n_species = 1, best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
@@ -205,15 +205,15 @@ module NEATJulia
     types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node]
     _n_mutations = length(types_of_mutation_probability)|>Unsigned
     if isnothing(mutation_probability)
-      mutation_probability = DataFrame(types_of_mutation_probability[1] => [Reference{Real}(3) for i in 1:population_size],
-                                       types_of_mutation_probability[2] => [Reference{Real}(1) for i in 1:population_size],
-                                       types_of_mutation_probability[3] => [Reference{Real}(1) for i in 1:population_size],
-                                       types_of_mutation_probability[4] => [Reference{Real}(0.25) for i in 1:population_size],
-                                       types_of_mutation_probability[5] => [Reference{Real}(0.25) for i in 1:population_size],
-                                       types_of_mutation_probability[6] => [Reference{Real}(0.1) for i in 1:population_size],
-                                       types_of_mutation_probability[7] => [Reference{Real}(0.1) for i in 1:population_size],
-                                       types_of_mutation_probability[8] => [Reference{Real}(0.1) for i in 1:population_size],
-                                       types_of_mutation_probability[9] => [Reference{Real}(0.1) for i in 1:population_size],
+      mutation_probability = DataFrame(types_of_mutation_probability[1] => [Reference{Real}(10.0) for i in 1:population_size],
+                                       types_of_mutation_probability[2] => [Reference{Real}(2.0) for i in 1:population_size],
+                                       types_of_mutation_probability[3] => [Reference{Real}(2.0) for i in 1:population_size],
+                                       types_of_mutation_probability[4] => [Reference{Real}(-floatmax(Float32)) for i in 1:population_size],
+                                       types_of_mutation_probability[5] => [Reference{Real}(-floatmax(Float32)) for i in 1:population_size],
+                                       types_of_mutation_probability[6] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[7] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[8] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[9] => [Reference{Real}(0.5) for i in 1:population_size],
                                       )
     elseif typeof(mutation_probability) <: DataFrame
       dataframe_columns = Symbol.(names(mutation_probability))
@@ -374,13 +374,19 @@ module NEATJulia
   end
 
   function _custom_weights(x::Vector{T}) where T<:Real
-    x[x .== Inf] .= floatmax(Float64)
-    x[x .== -Inf] .= -floatmax(Float64)
-    return Weights(x)
+    x[x .== Inf] .= floatmax(Float32)
+    x[x .== -Inf] .= -floatmax(Float32)
+    return Weights(Float64.(x))
   end
 
   function Mutation(x::Genome)
-    mutation = sample(collect(1:x._n_mutations), _custom_weights(collect(GetMutationProbability(x)[1,:])))
+    mutation = sample(collect(1:x._n_mutations), _custom_weights(abs.(collect(GetMutationProbability(x)[1,:]))))
+    if x.mutation_probability[1, :add_connection][] < 0 && mutation != 4
+      x.mutation_probability[1, :add_connection][] *= 1.5
+    end
+    if x.mutation_probability[1, :add_node][] < 0 && mutation != 5
+      x.mutation_probability[1, :add_node][] *= 1.1
+    end
 
     if mutation == 1 # no mutation
       return 1
@@ -410,6 +416,11 @@ module NEATJulia
         next_nodes_of_start_node = [i.out_node for i in start_node.out_connections]
         if !(end_node in next_nodes_of_start_node)
           idx = findfirst(x.super.GIN[:,2].<:Connection .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
+          if x.mutation_probability[1,:add_connection][] < 0
+            genome_info = GetGenomeInfo(x, simple = false)
+            n_connections = sum( genome_info[:,:type] .<: Connection )
+            x.mutation_probability[1,:add_connection][] = -1/(n_connections+1)
+          end
           if isnothing(idx)
             GIN = x.super.GIN[end,1]+0x1
             x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
@@ -487,6 +498,11 @@ module NEATJulia
         push!(x.layers[Unsigned(new_node_layer)], new_node)
       else
         insert!(x.layers, Unsigned(ceil(new_node_layer)), [new_node])
+      end
+      if x.mutation_probability[1,:add_node][] < 0
+        genome_info = GetGenomeInfo(x, simple = false)
+        n_nodes = sum( genome_info[:,:type] .<: HiddenNode )
+        x.mutation_probability[1,:add_node][] = -1/(n_nodes)
       end
 
       return 5, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
@@ -687,8 +703,7 @@ module NEATJulia
     end
 
     if crossover
-      # new_population = Genome[]
-      x.population = Genome[]
+      new_population = Genome[]
       good_individuals = Dict{Unsigned, Vector{Genome}}()
       bad_individuals = Dict{Unsigned, Vector{Genome}}()
       for i in keys(x.species)
@@ -718,9 +733,8 @@ module NEATJulia
         else
           throw(ArgumentError("Invalid value for n_individuals_to_retain, got $(x.n_individuals_to_retain), should be >= 0"))
         end
-        # append!(new_population, x.species[i][1:n_individuals_to_retain])
         n_individuals_to_retain = Unsigned(n_individuals_to_retain)
-        append!(x.population, x.species[i][1:n_individuals_to_retain])
+        append!(new_population, x.species[i][1:n_individuals_to_retain])
 
         if x.n_individuals_considered_best >= 1
           x.n_individuals_considered_best = round(x.n_individuals_considered_best)
@@ -737,10 +751,10 @@ module NEATJulia
       best_fitness_specie = argmax(x.specie_info[:,:mean_fitness])
       x.specie_info[best_fitness_specie,:last_topped_generation] = x.generation
 
-      for i = 1:length(x.population)
-        x.population[i].ID = i
+      for i = 1:length(new_population)
+        new_population[i].ID = i
       end
-      for i = length(x.population)+1:x.population_size
+      for i = length(new_population)+1:x.population_size
         crossover_probability = append!(x.crossover_probability[1:3], size(GetSpecieInfo(x, simple=true))[1]>1 ? x.crossover_probability[4:6] : [0,0,0])
         crossover = sample([1,2,3,4,5,6], _custom_weights(crossover_probability))
         if crossover == 1 # intraspecie good and good
@@ -795,10 +809,12 @@ module NEATJulia
         child.ID = i
         
         if mutate
-          Mutation(child)
+          Mutation(child)|>println
         end
-        push!(x.population, child)
+        push!(new_population, child)
       end
+      x.population = new_population
+
       x.mutation_probability = DataFrame()
       x.fitness = Reference{Real}[]
       x.output = Matrix{Reference{Real}}(undef, x.population_size, x.n_outputs)
