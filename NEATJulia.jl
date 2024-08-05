@@ -361,7 +361,10 @@ module NEATJulia
     end
     ret.ID = 0
     ret.fitness[] = -Inf
-    ret.input = x.input
+    ret.input = parent1.input
+    for i = 1:length(ret.input)
+      ret.genome[i].input = ret.input[i]
+    end
     ret.specie = 0x0
     for i = 1:size(ret.mutation_probability)[2]
       ret.mutation_probability[1,i][] = (parent1.mutation_probability[1,i][] + parent2.mutation_probability[1,i][])/2
