@@ -1,6 +1,6 @@
 
 module NEATJulia
-  using DataFrames, StatsBase, JLD2
+  using Random, DataFrames, StatsBase, JLD2
   include("Reference.jl")
   export Reference, getindex, setindex!, Node, InputNode, HiddenNode, OutputNode, Connection, Genome, NEAT, Init, Run, Relu, SetInput!, GetInput, GetOutput, GetFitness, SetExpectedOutput!, GetExpectedOutput, RunFitness, Sum_Abs_Diferrence, GetFitnessFunction, SetFitnessFunction!, GetMutationProbability, SetMutationProbability!, GetLayers, GetGenomeInfo, GetSpecieInfo, Show, SetCrossoverProbability!, GetCrossoverProbability, GetGIN, GetGenomeDistance, Load, Save
 
@@ -81,6 +81,7 @@ module NEATJulia
     RNN_enabled::Bool
     threshold_fitness::Real
     n_genomes_to_pass::Unsigned # number of geneomes to pass fitness test for NEAT to pass
+    n_generations_to_pass::Unsigned # number of consecutive generations to pass fitness test for NEAT to pass
     fitness_function::Reference{Union{Nothing, Function}}
     max_weight::Real
     min_weight::Real
@@ -106,6 +107,7 @@ module NEATJulia
     mutation_probability::DataFrame
     species::Dict{Unsigned, Vector{Genome}}
     specie_info::DataFrame # n_rows = n_species, columns = {specie number, minimum fitness, maximum fitness, mean fitness, last topped generation}
+    generations_passed::Unsigned
   end
 
   function InputNode(; GIN = 0, input_number = 0, input = Reference{Real}(), output = Reference{Real}(), out_connections = Connection[], processed = false, super = nothing)
@@ -193,7 +195,7 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, super, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 10, min_weight = -10, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 1, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 5,
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, n_generations_to_pass = 10, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 2, min_weight = -2, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 0.25, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 1,
 
       population = Genome[], generation = 0, n_species = 1, best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
@@ -208,8 +210,8 @@ module NEATJulia
       mutation_probability = DataFrame(types_of_mutation_probability[1] => [Reference{Real}(10.0) for i in 1:population_size],
                                        types_of_mutation_probability[2] => [Reference{Real}(2.0) for i in 1:population_size],
                                        types_of_mutation_probability[3] => [Reference{Real}(2.0) for i in 1:population_size],
-                                       types_of_mutation_probability[4] => [Reference{Real}(-floatmax(Float32)) for i in 1:population_size],
-                                       types_of_mutation_probability[5] => [Reference{Real}(-floatmax(Float32)) for i in 1:population_size],
+                                       types_of_mutation_probability[4] => [Reference{Real}(-1e15) for i in 1:population_size],
+                                       types_of_mutation_probability[5] => [Reference{Real}(-1e10) for i in 1:population_size],
                                        types_of_mutation_probability[6] => [Reference{Real}(0.5) for i in 1:population_size],
                                        types_of_mutation_probability[7] => [Reference{Real}(0.5) for i in 1:population_size],
                                        types_of_mutation_probability[8] => [Reference{Real}(0.5) for i in 1:population_size],
@@ -300,10 +302,11 @@ module NEATJulia
                       in_node = Vector{Union{Nothing, Unsigned}}(),
                       out_node = Vector{Union{Nothing, Unsigned}}(),
                      )
+    generations_passed = 0
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, _n_mutations,
+    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, n_generations_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, _n_mutations,
 
-         population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info)
+         population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info, generations_passed)
   end
 
   function Init(x::Genome)
@@ -362,6 +365,7 @@ module NEATJulia
     ret.ID = 0
     ret.fitness[] = -Inf
     ret.input = parent1.input
+    ret.expected_output = parent1.expected_output
     for i = 1:length(ret.input)
       ret.genome[i].input = ret.input[i]
     end
@@ -377,13 +381,13 @@ module NEATJulia
   end
 
   function _custom_weights(x::Vector{T}) where T<:Real
-    x[x .== Inf] .= floatmax(Float32)
-    x[x .== -Inf] .= -floatmax(Float32)
+    x[x .>= 1e100] .= 1e100
+    x[x .<= -1e100] .= -1e100
     return Weights(Float64.(x))
   end
 
   function Mutation(x::Genome)
-    mutation = sample(collect(1:x._n_mutations), _custom_weights(abs.(collect(GetMutationProbability(x)[1,:]))))
+    mutation = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), collect(1:x._n_mutations), _custom_weights(abs.(collect(GetMutationProbability(x)[1,:]))))
     if x.mutation_probability[1, :add_connection][] < 0 && mutation != 4
       x.mutation_probability[1, :add_connection][] *= 1.5
     end
@@ -621,14 +625,21 @@ module NEATJulia
       x.processed = true
       return
     end
-    output = 0.0
+    output = nothing
     for i in x.in_connections
       if i.enabled
         if !(i.processed)
           return
         end
-        output += i.output[]
+        if isnothing(output)
+          output = i.output[]
+        else
+          output += i.output[]
+        end
       end
+    end
+    if isnothing(output)
+      output = rand()
     end
     x.output[] = x.activation(output + x.bias)
     x.processed = true
@@ -638,14 +649,21 @@ module NEATJulia
     return x.output
   end
   function Run(x::OutputNode)
-    output = 0.0
+    output = nothing
     for i in x.in_connections
       if i.enabled
         if !(i.processed)
           return
         end
-        output += i.output[]
+        if isnothing(output)
+          output = i.output[]
+        else
+          output += i.output[]
+        end
       end
+    end
+    if isnothing(output)
+      output = rand()
     end
     x.output[] = x.activation(output + x.bias)
     x.processed = true
@@ -654,6 +672,7 @@ module NEATJulia
   function Run(x::Connection)
     if !(x.enabled) || !(x.in_node.enabled) || !(x.out_node.enabled)
       x.processed = true
+      x.output[] = rand()
       return
     end
     if !(x.in_node.processed)
@@ -678,15 +697,15 @@ module NEATJulia
     end
   end
   function Run(x::NEAT; evaluate::Bool = false, crossover::Bool = false, mutate::Bool = false, generation::Bool = false)
-    passed_genomes = getindex.(getproperty.(x.population, :fitness)) .>= x.threshold_fitness
-    n_passed = sum(passed_genomes)
-    if n_passed >= x.n_genomes_to_pass
-      @info "!! Congratulations, NEAT terminated\n!! $(n_passed) genomes have reached the threshold fitness\n!! Passed genomes = $(findall(passed_genomes))"
-      return true
-    elseif x.generation >= x.max_generation
-      @info "NEAT terminated: reached maximum generation"
-      return false
-    end
+    # passed_genomes = getindex.(getproperty.(x.population, :fitness)) .>= x.threshold_fitness
+    # n_passed = sum(passed_genomes)
+    # if n_passed >= x.n_genomes_to_pass
+    #   @info "!! Congratulations, NEAT terminated\n!! $(n_passed) genomes have reached the threshold fitness\n!! Passed genomes = $(findall(passed_genomes))"
+    #   return true
+    # elseif x.generation >= x.max_generation
+    #   @info "NEAT terminated: reached maximum generation"
+    #   return false
+    # end
 
     mutate = generation ? true : mutate
     crossover = mutate ? true : crossover
@@ -698,6 +717,11 @@ module NEATJulia
     passed_genomes = getindex.(getproperty.(x.population, :fitness)) .>= x.threshold_fitness
     n_passed = sum(passed_genomes)
     if n_passed >= x.n_genomes_to_pass
+      x.generations_passed += 0x1
+    else
+      x.generations_passed = 0x0
+    end
+    if x.generations_passed >= x.n_generations_to_pass
       @info "!! Congratulations, NEAT terminated\n!! $(n_passed) genomes have reached the threshold fitness\n!! Passesd genomes = $(findall(passed_genomes))"
       return true
     elseif x.generation >= x.max_generation
@@ -759,9 +783,9 @@ module NEATJulia
       end
       for i = length(new_population)+1:x.population_size
         crossover_probability = append!(x.crossover_probability[1:3], size(GetSpecieInfo(x, simple=true))[1]>1 ? x.crossover_probability[4:6] : [0,0,0])
-        crossover = sample([1,2,3,4,5,6], _custom_weights(crossover_probability))
+        crossover = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), [1,2,3,4,5,6], _custom_weights(crossover_probability))
         if crossover == 1 # intraspecie good and good
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
           specie2 = specie1
 
           parent1 = rand(good_individuals[specie1])
@@ -769,7 +793,7 @@ module NEATJulia
 
           child = Crossover(parent1, parent2)
         elseif crossover == 2 # intraspecie good and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
           specie2 = specie1
 
           parent1 = rand(good_individuals[specie1])
@@ -777,7 +801,7 @@ module NEATJulia
 
           child = Crossover(parent1, parent2)
         elseif crossover == 3 # intraspecie bad and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
           specie2 = specie1
 
           parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
@@ -785,24 +809,24 @@ module NEATJulia
 
           child = Crossover(parent1, parent2)
         elseif crossover == 4 # interspecie good and good
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
 
           parent1 = rand(good_individuals[specie1])
           parent2 = rand(good_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         elseif crossover == 5 # interspecie good and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
 
           parent1 = rand(good_individuals[specie1])
           parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         else # interspecie bad and bad
-          specie1 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
 
           parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
           parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
@@ -833,6 +857,7 @@ module NEATJulia
       x.generation += 0x1
     end
 
+    return x.generation
   end
 
   function Show(x::Genome; directed::Bool = true, rankdir_LR::Bool = true, connection_label::Bool = true, pen_width::Real = 1.0, export_type::String = "svg", simple::Bool = true)
@@ -915,7 +940,7 @@ module NEATJulia
       x.input[i][] = args[i]
     end
   end
-  function SetInput!(x::Union{NEAT, Genome}, y::Vector{Real})
+  function SetInput!(x::Union{NEAT, Genome}, y::Vector{T}) where T<:Real
     SetInput!(x, y...)
   end
 
