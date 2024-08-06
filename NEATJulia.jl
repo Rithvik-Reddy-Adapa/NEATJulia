@@ -911,7 +911,7 @@ module NEATJulia
       graphviz_code = "graph {\n" * graphviz_code * "}"
     end
 
-    dot_filename = "neat_$(x.super.generation)_$(x.ID).dot"
+    dot_filename = simple ? "neat_$(x.super.generation)_$(x.ID)_simple.dot" : "neat_$(x.super.generation)_$(x.ID).dot"
     open(dot_filename, "w") do file
       write(file, graphviz_code)
     end
