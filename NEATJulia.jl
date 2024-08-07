@@ -23,7 +23,7 @@ module NEATJulia
     input::Vector{Reference{Real}}
     output::Reference{Real}
     out_connections::Vector{Connection}
-    activation::Function
+    activation_function::Function
     bias::Real
     enabled::Bool
     processed::Bool
@@ -36,7 +36,7 @@ module NEATJulia
     input::Vector{Reference{Real}}
     output::Reference{Real}
     output_number::Unsigned
-    activation::Function
+    activation_function::Function
     bias::Real
     const enabled::Bool
     processed::Bool
@@ -59,6 +59,7 @@ module NEATJulia
     n_inputs::Unsigned
     n_outputs::Unsigned
     super::Union{Nothing, NEAT}
+    list_activation_functions::Vector{Function}
     const _n_mutations::Unsigned
 
     ID::Unsigned
@@ -93,6 +94,7 @@ module NEATJulia
     max_specie_stagnation::Unsigned
     distance_parameters::Vector{Real}
     threshold_distance::Real
+    list_activation_functions::Vector{Function}
     const _n_mutations::Unsigned
 
     population::Vector{Genome}
@@ -114,13 +116,13 @@ module NEATJulia
     enabled = true
     InputNode{Connection, Genome}(GIN, input_number, input, output, out_connections, enabled, processed, super)
   end
-  function HiddenNode(; GIN = 0, in_connections = Connection[], input = Reference{Real}[], output = Reference{Real}(), out_connections = Connection[], activation = Relu, bias = 0.0, processed = false, super = nothing)
+  function HiddenNode(; GIN = 0, in_connections = Connection[], input = Reference{Real}[], output = Reference{Real}(), out_connections = Connection[], activation_function = Relu, bias = 0.0, processed = false, super = nothing)
     enabled = true
-    HiddenNode{Connection, Genome}(GIN, in_connections, input, output, out_connections, activation, bias, enabled, processed, super)
+    HiddenNode{Connection, Genome}(GIN, in_connections, input, output, out_connections, activation_function, bias, enabled, processed, super)
   end
-  function OutputNode(; GIN = 0, in_connections = Connection[], input = Reference{Real}[], output = Reference{Real}(), output_number = 0, activation = Relu, bias = 0.0, processed = false, super = nothing)
+  function OutputNode(; GIN = 0, in_connections = Connection[], input = Reference{Real}[], output = Reference{Real}(), output_number = 0, activation_function = Relu, bias = 0.0, processed = false, super = nothing)
     enabled = true
-    OutputNode{Connection, Genome}(GIN, in_connections, input, output, output_number, activation, bias, enabled, processed, super)
+    OutputNode{Connection, Genome}(GIN, in_connections, input, output, output_number, activation_function, bias, enabled, processed, super)
   end
   function Connection(in_node, out_node; GIN = 0, weight = rand(), enabled = true, processed = false, super = nothing)
 
@@ -134,7 +136,7 @@ module NEATJulia
 
     return connection
   end
-  function Genome(n_inputs, n_outputs; ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Reference{Real}}} = nothing) where T<:Real
+  function Genome(n_inputs, n_outputs; list_activation_functions = [Identity, Relu, Sigmoid, Tanh, Sin], ID = 0, specie = 1, genome = Dict{Unsigned, Union{Node, Connection}}(), input = Reference{Real}[], output = Reference{Real}[], expected_output = Reference{Real}[], fitness = Reference{Real}(), fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), super = nothing, mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Reference{Real}}} = nothing) where T<:Real
 
     (n_inputs > 0) || throw(ArgumentError("Invalid n_inputs $(n_inputs), should be > 0"))
     (n_outputs > 0) || throw(ArgumentError("Invalid n_outputs $(n_outputs), should be > 0"))
@@ -144,10 +146,10 @@ module NEATJulia
 
     layers = Vector{Node}[]
 
-    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node]
+    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node, :change_activation_function]
     _n_mutations = length(types_of_mutation_probability)|>Unsigned
     if isnothing(mutation_probability) # do nothing
-      mutation_probability = DataFrame(types_of_mutation_probability[1] => Reference{Real}[Reference{Real}(3)],
+      mutation_probability = DataFrame(types_of_mutation_probability[1] => Reference{Real}[Reference{Real}(4)],
                                        types_of_mutation_probability[2] => Reference{Real}[Reference{Real}(1)],
                                        types_of_mutation_probability[3] => Reference{Real}[Reference{Real}(1)],
                                        types_of_mutation_probability[4] => Reference{Real}[Reference{Real}(0.25)],
@@ -156,6 +158,7 @@ module NEATJulia
                                        types_of_mutation_probability[7] => Reference{Real}[Reference{Real}(0.1)],
                                        types_of_mutation_probability[8] => Reference{Real}[Reference{Real}(0.1)],
                                        types_of_mutation_probability[9] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[10] => Reference{Real}[Reference{Real}(0.1)],
                                       )
     elseif typeof(mutation_probability) <: DataFrame
       dataframe_columns = Symbol.(names(mutation_probability))
@@ -193,9 +196,9 @@ module NEATJulia
       throw(ArgumentError("Got invalid datatype i.e. $(typeof(mutation_probability)) for mutation_probability, mutation_probability should be a DataFrame of 1 row and $(types_of_mutation_probability) columns or a Dict of keys as column names."))
     end
 
-    Genome{NEAT}(n_inputs, n_outputs, super, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
+    Genome{NEAT}(n_inputs, n_outputs, super, list_activation_functions, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, n_generations_to_pass = 10, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 2, min_weight = -2, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 0.25, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 1,
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, n_generations_to_pass = 10, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 2, min_weight = -2, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 0.25, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 1, list_activation_functions = [Identity, Relu, Sigmoid, Tanh, Sin],
 
       population = Genome[], generation = 0, n_species = 1, best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
@@ -204,7 +207,7 @@ module NEATJulia
     (population_size > 0) || throw(ArgumentError("Invalid population_size $(population_size), should be > 0"))
     (isempty(population)) && (population = Vector{Genome}(undef, population_size))
 
-    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node]
+    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node, :change_activation_function]
     _n_mutations = length(types_of_mutation_probability)|>Unsigned
     if isnothing(mutation_probability)
       mutation_probability = DataFrame(types_of_mutation_probability[1] => [Reference{Real}(10.0) for i in 1:population_size],
@@ -216,6 +219,7 @@ module NEATJulia
                                        types_of_mutation_probability[7] => [Reference{Real}(0.5) for i in 1:population_size],
                                        types_of_mutation_probability[8] => [Reference{Real}(0.5) for i in 1:population_size],
                                        types_of_mutation_probability[9] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[10] => [Reference{Real}(0.5) for i in 1:population_size],
                                       )
     elseif typeof(mutation_probability) <: DataFrame
       dataframe_columns = Symbol.(names(mutation_probability))
@@ -304,7 +308,7 @@ module NEATJulia
                      )
     generations_passed = 0
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, n_generations_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, _n_mutations,
+    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, n_generations_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, list_activation_functions, _n_mutations,
 
          population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info, generations_passed)
   end
@@ -327,7 +331,7 @@ module NEATJulia
   end
   function Init(x::NEAT)
     for i = 1:x.population_size
-      x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i], mutation_probability = DataFrame(x.mutation_probability[i,:]))
+      x.population[i] = Genome(x.n_inputs, x.n_outputs, ID = i, super = x, fitness_function = x.fitness_function, input = x.input, output = x.output[i,:], expected_output = x.expected_output, fitness = x.fitness[i], mutation_probability = DataFrame(x.mutation_probability[i,:]), list_activation_functions = x.list_activation_functions)
       Init(x.population[i])
     end
     for i = 1:x.n_inputs
@@ -515,44 +519,49 @@ module NEATJulia
       return 5, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
     elseif mutation == 6 # disable connection
       genome_info = GetGenomeInfo(x, simple = true)
-      connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
+      connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==true),:GIN]
       if isempty(connections)
         return 6
       end
-      connections = [x.genome[i] for i in connections]
       random_connection = rand(connections)
-      random_connection.enabled = false
-      return 6, random_connection.GIN
+      x.genome[random_connection].enabled = false
+      return 6, random_connection
     elseif mutation == 7 # disable node
       genome_info = GetGenomeInfo(x, simple = true)
-      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode),:GIN]
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,enabled].==true),:GIN]
       if isempty(hidden_nodes)
         return 7
       end
-      hidden_nodes = [x.genome[i] for i in hidden_nodes]
       random_hidden_node = rand(hidden_nodes)
-      random_hidden_node.enabled = false
-      return 7, random_hidden_node.GIN
+      x.genome[random_hidden_node].enabled = false
+      return 7, random_hidden_node
     elseif mutation == 8 # enable connection
       genome_info = GetGenomeInfo(x)
       connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==false),:GIN]
       if isempty(connections)
         return 8
       end
-      connections = [x.genome[i] for i in connections]
       random_connection = rand(connections)
-      random_connection.enabled = true
-      return 8, random_connection.GIN
+      x.genome[random_connection].enabled = true
+      return 8, random_connection
     elseif mutation == 9 # enable node
       genome_info = GetGenomeInfo(x)
       hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==false),:GIN]
       if isempty(hidden_nodes)
         return 9
       end
-      hidden_nodes = [x.genome[i] for i in hidden_nodes]
       random_hidden_node = rand(hidden_nodes)
-      random_hidden_node.enabled = true
-      return 9, random_hidden_node.GIN
+      x.genome[random_hidden_node].enabled = true
+      return 9, random_hidden_node
+    elseif mutation == 10 # change activation function
+      genome_info = GetGenomeInfo(x)
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==true),:GIN]
+      if isempty(hidden_nodes)
+        return 10
+      end
+      random_hidden_node = rand(hidden_nodes)
+      x.genome[random_hidden_node].activation_function = rand(x.list_activation_functions)
+      return 10, random_hidden_node
     end
   end
 
@@ -641,7 +650,7 @@ module NEATJulia
     if isnothing(output)
       output = rand()
     end
-    x.output[] = x.activation(output + x.bias)
+    x.output[] = x.activation_function(output + x.bias)
     x.processed = true
     for i in x.out_connections
       Run(i)
@@ -665,7 +674,7 @@ module NEATJulia
     if isnothing(output)
       output = rand()
     end
-    x.output[] = x.activation(output + x.bias)
+    x.output[] = x.activation_function(output + x.bias)
     x.processed = true
     return x.output
   end
@@ -1235,8 +1244,20 @@ module NEATJulia
     return ret
   end
 
+  function Identity(x::Real)
+    return x
+  end
   function Relu(x::Real)
     return max(x, 0.0)
+  end
+  function Sigmoid(x::Real)
+    return 1/(1+exp(-x))
+  end
+  function Tanh(x::Real)
+    return tanh(x)
+  end
+  function Sin(x::Real)
+    return sin(x)
   end
    
   function Sum_Abs_Diferrence(output::Vector{<:Real}, expected_output::Vector{<:Real})
