@@ -86,8 +86,10 @@ module NEATJulia
     fitness_function::Reference{Union{Nothing, Function}}
     max_weight::Real
     min_weight::Real
+    max_shift_weight::Real
     max_bias::Real
     min_bias::Real
+    max_shift_bias::Real
     n_individuals_considered_best::Real # number of individuals considered best in a specie in a generation. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
     n_individuals_to_retain::Real # number of individuals to retain unchanged for next generation of a specie. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
     crossover_probability::Vector{Real} # [intraspecie good and good, intraspecie good and bad, intraspecie bad and bad, interspecie good and good, interspecie good and bad, interspecie bad and bad]
@@ -124,7 +126,7 @@ module NEATJulia
     enabled = true
     OutputNode{Connection, Genome}(GIN, in_connections, input, output, output_number, activation_function, bias, enabled, processed, super)
   end
-  function Connection(in_node, out_node; GIN = 0, weight = rand(), enabled = true, processed = false, super = nothing)
+  function Connection(in_node, out_node; GIN = 0, weight = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), ), enabled = true, processed = false, super = nothing)
 
     input = in_node.output
     push!(out_node.input, Reference{Real}())
@@ -146,19 +148,21 @@ module NEATJulia
 
     layers = Vector{Node}[]
 
-    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node, :change_activation_function]
+    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :shift_weight, :shift_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node, :change_activation_function]
     _n_mutations = length(types_of_mutation_probability)|>Unsigned
     if isnothing(mutation_probability) # do nothing
       mutation_probability = DataFrame(types_of_mutation_probability[1] => Reference{Real}[Reference{Real}(4)],
-                                       types_of_mutation_probability[2] => Reference{Real}[Reference{Real}(1)],
-                                       types_of_mutation_probability[3] => Reference{Real}[Reference{Real}(1)],
-                                       types_of_mutation_probability[4] => Reference{Real}[Reference{Real}(0.25)],
-                                       types_of_mutation_probability[5] => Reference{Real}[Reference{Real}(0.25)],
-                                       types_of_mutation_probability[6] => Reference{Real}[Reference{Real}(0.1)],
-                                       types_of_mutation_probability[7] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[2] => Reference{Real}[Reference{Real}(4)],
+                                       types_of_mutation_probability[3] => Reference{Real}[Reference{Real}(0.5)],
+                                       types_of_mutation_probability[4] => Reference{Real}[Reference{Real}(4.5)],
+                                       types_of_mutation_probability[5] => Reference{Real}[Reference{Real}(0.5)],
+                                       types_of_mutation_probability[6] => Reference{Real}[Reference{Real}(0.25)],
+                                       types_of_mutation_probability[7] => Reference{Real}[Reference{Real}(0.25)],
                                        types_of_mutation_probability[8] => Reference{Real}[Reference{Real}(0.1)],
                                        types_of_mutation_probability[9] => Reference{Real}[Reference{Real}(0.1)],
                                        types_of_mutation_probability[10] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[11] => Reference{Real}[Reference{Real}(0.1)],
+                                       types_of_mutation_probability[12] => Reference{Real}[Reference{Real}(0.1)],
                                       )
     elseif typeof(mutation_probability) <: DataFrame
       dataframe_columns = Symbol.(names(mutation_probability))
@@ -198,7 +202,7 @@ module NEATJulia
 
     Genome{NEAT}(n_inputs, n_outputs, super, list_activation_functions, _n_mutations, ID, specie, genome, layers, input, output, expected_output, fitness, fitness_function, mutation_probability)
   end
-  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, n_generations_to_pass = 10, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 2, min_weight = -2, max_bias = 5, min_bias = -5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 0.25, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 1, list_activation_functions = [Identity, Relu, Sigmoid, Tanh, Sin],
+  function NEAT(n_inputs, n_outputs; population_size = 20, max_generation = 50, RNN_enabled = false, threshold_fitness = -0.001, n_genomes_to_pass = 1, n_generations_to_pass = 10, fitness_function = Reference{Union{Nothing, Function}}(Sum_Abs_Diferrence), max_weight = 2, min_weight = -2, max_shift_weight = 0.05, max_bias = 5, min_bias = -5, max_shift_bias = 0.5, n_individuals_considered_best = 0.25, n_individuals_to_retain = 0.25, crossover_probability = [0.5, 1, 0.1, 0, 0, 0], max_specie_stagnation = 0x20, distance_parameters = [1, 1, 1], threshold_distance = 1, list_activation_functions = [Identity, Relu, Sigmoid, Tanh, Sin],
 
       population = Genome[], generation = 0, n_species = 1, best_genome = nothing, expected_output = Reference{Real}[], mutation_probability::Union{Nothing, DataFrame, Dict{Symbol, T}, Dict{Symbol, Vector{T}}, Dict{Symbol, Vector{Reference{Real}}}} = nothing, specie_info = nothing) where T<:Real
 
@@ -207,19 +211,21 @@ module NEATJulia
     (population_size > 0) || throw(ArgumentError("Invalid population_size $(population_size), should be > 0"))
     (isempty(population)) && (population = Vector{Genome}(undef, population_size))
 
-    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node, :change_activation_function]
+    types_of_mutation_probability = [:no_mutation, :change_weight, :change_bias, :shift_weight, :shift_bias, :add_connection, :add_node, :disable_connection, :disable_node, :enable_connection, :enable_node, :change_activation_function]
     _n_mutations = length(types_of_mutation_probability)|>Unsigned
     if isnothing(mutation_probability)
       mutation_probability = DataFrame(types_of_mutation_probability[1] => [Reference{Real}(10.0) for i in 1:population_size],
-                                       types_of_mutation_probability[2] => [Reference{Real}(2.0) for i in 1:population_size],
+                                       types_of_mutation_probability[2] => [Reference{Real}(5.0) for i in 1:population_size],
                                        types_of_mutation_probability[3] => [Reference{Real}(2.0) for i in 1:population_size],
-                                       types_of_mutation_probability[4] => [Reference{Real}(-1e15) for i in 1:population_size],
-                                       types_of_mutation_probability[5] => [Reference{Real}(-1e10) for i in 1:population_size],
-                                       types_of_mutation_probability[6] => [Reference{Real}(0.5) for i in 1:population_size],
-                                       types_of_mutation_probability[7] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[4] => [Reference{Real}(5.0) for i in 1:population_size],
+                                       types_of_mutation_probability[5] => [Reference{Real}(2.0) for i in 1:population_size],
+                                       types_of_mutation_probability[6] => [Reference{Real}(-1e15) for i in 1:population_size],
+                                       types_of_mutation_probability[7] => [Reference{Real}(-1e10) for i in 1:population_size],
                                        types_of_mutation_probability[8] => [Reference{Real}(0.5) for i in 1:population_size],
                                        types_of_mutation_probability[9] => [Reference{Real}(0.5) for i in 1:population_size],
                                        types_of_mutation_probability[10] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[11] => [Reference{Real}(0.5) for i in 1:population_size],
+                                       types_of_mutation_probability[12] => [Reference{Real}(0.5) for i in 1:population_size],
                                       )
     elseif typeof(mutation_probability) <: DataFrame
       dataframe_columns = Symbol.(names(mutation_probability))
@@ -308,7 +314,7 @@ module NEATJulia
                      )
     generations_passed = 0
 
-    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, n_generations_to_pass, fitness_function, max_weight, min_weight, max_bias, min_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, list_activation_functions, _n_mutations,
+    NEAT(n_inputs, n_outputs, population_size, max_generation, RNN_enabled, threshold_fitness, n_genomes_to_pass, n_generations_to_pass, fitness_function, max_weight, min_weight, max_shift_weight, max_bias, min_bias, max_shift_bias, n_individuals_considered_best, n_individuals_to_retain, crossover_probability, max_specie_stagnation, distance_parameters, threshold_distance, list_activation_functions, _n_mutations,
 
          population, generation, n_species, GIN, input, best_genome, output, expected_output, fitness, mutation_probability, species, specie_info, generations_passed)
   end
@@ -323,7 +329,7 @@ module NEATJulia
 
     temp_vec = Node[]
     for i = 1:x.n_outputs
-      x.genome[x.n_inputs + i] = OutputNode(GIN = x.n_inputs + i, output_number = i, super = x, output = x.output[i])
+      x.genome[x.n_inputs + i] = OutputNode(GIN = x.n_inputs + i, output_number = i, super = x, output = x.output[i], activation_function = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), x.list_activation_functions))
       push!(temp_vec, x.genome[x.n_inputs + i])
     end
     push!(x.layers, temp_vec)
@@ -358,11 +364,11 @@ module NEATJulia
     ret.super = super
     parent1.super = super
     for i in keys(ret.genome)
-      if haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: Connection) && rand([true, false])
+      if haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: Connection) && rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), [true, false])
         ret.genome[i].weight = parent2.genome[i].weight
-      elseif haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: HiddenNode) && rand([true, false])
+      elseif haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: HiddenNode) && rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), [true, false])
         ret.genome[i].bias = parent2.genome[i].bias
-      elseif haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: OutputNode) && rand([true, false])
+      elseif haskey(parent2.genome, i) && (typeof(parent2.genome[i]) <: OutputNode) && rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), [true, false])
         ret.genome[i].bias = parent2.genome[i].bias
       end
     end
@@ -408,55 +414,83 @@ module NEATJulia
         return 2
       end
       connections = [x.genome[i] for i in connections]
-      random_connection = rand(connections)
-      random_connection.weight = x.super.min_weight + (x.super.max_weight - x.super.min_weight)*rand()
+      random_connection = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), connections)
+      random_connection.weight = x.super.min_weight + (x.super.max_weight - x.super.min_weight)*rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), )
       return 2, random_connection.GIN
     elseif mutation == 3 # change bias
       genome_info = GetGenomeInfo(x, simple = true)
       nodes = genome_info[(genome_info[:,:type].<:HiddenNode).||(genome_info[:,:type].<:OutputNode),:GIN]
       nodes = [x.genome[i] for i in nodes]
-      random_node = rand(nodes)
-      random_node.bias = x.super.min_bias + (x.super.max_bias - x.super.min_bias)*rand()
+      random_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), nodes)
+      random_node.bias = x.super.min_bias + (x.super.max_bias - x.super.min_bias)*rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), )
       return 3, random_node.GIN
-    elseif mutation == 4 # add connection
+    elseif mutation == 4 # shift weight
+      genome_info = GetGenomeInfo(x, simple = true)
+      connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
+      if isempty(connections)
+        return 4
+      end
+      random_connection = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), connections)
+      x.genome[random_connection].weight += rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), [1,-1]) * rand(MersenneTwister(Int(round(modf(time())[1]*1e15)))) * x.super.max_shift_weight
+      if x.genome[random_connection].weight > x.super.max_weight
+        x.genome[random_connection].weight = x.super.max_weight
+      end
+      if x.genome[random_connection].weight < x.super.min_weight
+        x.genome[random_connection].weight = x.super.min_weight
+      end
+      return 4, random_connection
+    elseif mutation == 5 # shift bias
+      genome_info = GetGenomeInfo(x, simple = true)
+      nodes = genome_info[(genome_info[:,:type].<:HiddenNode).||(genome_info[:,:type].<:OutputNode),:GIN]
+      random_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), nodes)
+      x.genome[random_node].bias += rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), [1,-1]) * rand(MersenneTwister(Int(round(modf(time())[1]*1e15)))) * x.super.max_shift_bias
+      if x.genome[random_node].bias > x.super.max_bias
+        x.genome[random_node].bias = x.super.max_bias
+      end
+      if x.genome[random_node].bias < x.super.min_bias
+        x.genome[random_node].bias = x.super.min_bias
+      end
+      return 5, random_node
+    elseif mutation == 6 # add connection
       for itr = 1:3
-        start_layer = rand(1:length(x.layers)-1)
-        start_node = rand(x.layers[start_layer])
-        end_layer = rand(start_layer+1:length(x.layers))
-        end_node = rand(x.layers[end_layer])
+        start_layer = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), 1:length(x.layers)-1)
+        start_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), x.layers[start_layer])
+        end_layer = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), start_layer+1:length(x.layers))
+        end_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), x.layers[end_layer])
         next_nodes_of_start_node = [i.out_node for i in start_node.out_connections]
         if !(end_node in next_nodes_of_start_node)
           idx = findfirst(x.super.GIN[:,2].<:Connection .&& x.super.GIN[:,3].==start_node.GIN .&& x.super.GIN[:,4].==end_node.GIN)
           if x.mutation_probability[1,:add_connection][] < 0
             genome_info = GetGenomeInfo(x, simple = false)
             n_connections = sum( genome_info[:,:type] .<: Connection )
-            x.mutation_probability[1,:add_connection][] = -1/(n_connections+1)
+            x.mutation_probability[1,:add_connection][] = -1/(n_connections+1)^2
           end
           if isnothing(idx)
             GIN = x.super.GIN[end,1]+0x1
             x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
             push!(x.super.GIN, [GIN, Connection, start_node.GIN, end_node.GIN])
-            return 4, GIN, "new"
+            return 6, GIN, "new"
           else
             GIN = x.super.GIN[idx,1]
             x.genome[GIN] = Connection(start_node, end_node, GIN = GIN, super = x)
-            return 4, GIN, "old"
+            return 6, GIN, "old"
           end
         end
       end
-      return 4
-    elseif mutation == 5 # add node
+      return 6
+    elseif mutation == 7 # add node
       genome_info = GetGenomeInfo(x, simple = true)
       connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
       if isempty(connections)
-        return 5
+        return 7
       end
-      connections = [x.genome[i] for i in connections]
+      # connections = [x.genome[i] for i in connections]
       # get a random connection
-      random_connection = rand(connections)
-      while !(random_connection.enabled)
-        random_connection = rand(connections)
-      end
+      random_connection = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), connections)
+      # while !(x.genome[random_connection].enabled)
+      #   random_connection = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), connections)
+      # end
+      random_connection = x.genome[random_connection]
 
       # find the layer number of the random connection's in node
       start_layer = 1
@@ -487,7 +521,7 @@ module NEATJulia
       end
 
       GIN = x.super.GIN[end,1]+0x1
-      new_node = HiddenNode(GIN = GIN, super = x)
+      new_node = HiddenNode(GIN = GIN, super = x, activation_function = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), x.list_activation_functions))
       x.genome[GIN] = new_node
       push!(x.super.GIN, [GIN, HiddenNode, nothing, nothing])
 
@@ -504,7 +538,7 @@ module NEATJulia
       random_connection.enabled = false
 
       # get a random layer for new node
-      new_node_layer = rand(start_layer+0.5:0.5:end_layer-0.5)
+      new_node_layer = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), start_layer+0.5:0.5:end_layer-0.5)
       if new_node_layer == floor(new_node_layer) # add into existing layer
         push!(x.layers[Unsigned(new_node_layer)], new_node)
       else
@@ -513,55 +547,55 @@ module NEATJulia
       if x.mutation_probability[1,:add_node][] < 0
         genome_info = GetGenomeInfo(x, simple = false)
         n_nodes = sum( genome_info[:,:type] .<: HiddenNode )
-        x.mutation_probability[1,:add_node][] = -1/(n_nodes)
+        x.mutation_probability[1,:add_node][] = -1/(n_nodes)^2
       end
 
-      return 5, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
-    elseif mutation == 6 # disable connection
+      return 7, new_node.GIN, new_node_in_connection.GIN, new_node_out_connection.GIN
+    elseif mutation == 8 # disable connection
       genome_info = GetGenomeInfo(x, simple = true)
-      connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==true),:GIN]
-      if isempty(connections)
-        return 6
-      end
-      random_connection = rand(connections)
-      x.genome[random_connection].enabled = false
-      return 6, random_connection
-    elseif mutation == 7 # disable node
-      genome_info = GetGenomeInfo(x, simple = true)
-      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,enabled].==true),:GIN]
-      if isempty(hidden_nodes)
-        return 7
-      end
-      random_hidden_node = rand(hidden_nodes)
-      x.genome[random_hidden_node].enabled = false
-      return 7, random_hidden_node
-    elseif mutation == 8 # enable connection
-      genome_info = GetGenomeInfo(x)
-      connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==false),:GIN]
+      connections = genome_info[(genome_info[:,:type].<:Connection),:GIN]
       if isempty(connections)
         return 8
       end
-      random_connection = rand(connections)
-      x.genome[random_connection].enabled = true
+      random_connection = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), connections)
+      x.genome[random_connection].enabled = false
       return 8, random_connection
-    elseif mutation == 9 # enable node
-      genome_info = GetGenomeInfo(x)
-      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==false),:GIN]
+    elseif mutation == 9 # disable node
+      genome_info = GetGenomeInfo(x, simple = true)
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode),:GIN]
       if isempty(hidden_nodes)
         return 9
       end
-      random_hidden_node = rand(hidden_nodes)
-      x.genome[random_hidden_node].enabled = true
+      random_hidden_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), hidden_nodes)
+      x.genome[random_hidden_node].enabled = false
       return 9, random_hidden_node
-    elseif mutation == 10 # change activation function
+    elseif mutation == 10 # enable connection
       genome_info = GetGenomeInfo(x)
-      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==true),:GIN]
-      if isempty(hidden_nodes)
+      connections = genome_info[(genome_info[:,:type].<:Connection).&&(genome_info[:,:enabled].==false),:GIN]
+      if isempty(connections)
         return 10
       end
-      random_hidden_node = rand(hidden_nodes)
-      x.genome[random_hidden_node].activation_function = rand(x.list_activation_functions)
-      return 10, random_hidden_node
+      random_connection = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), connections)
+      x.genome[random_connection].enabled = true
+      return 10, random_connection
+    elseif mutation == 11 # enable node
+      genome_info = GetGenomeInfo(x)
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:enabled].==false),:GIN]
+      if isempty(hidden_nodes)
+        return 11
+      end
+      random_hidden_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), hidden_nodes)
+      x.genome[random_hidden_node].enabled = true
+      return 11, random_hidden_node
+    elseif mutation == 12 # change activation function
+      genome_info = GetGenomeInfo(x, simple = true)
+      hidden_nodes = genome_info[(genome_info[:,:type].<:HiddenNode).&&(genome_info[:,:type].<:OutputNode),:GIN]
+      if isempty(hidden_nodes)
+        return 12
+      end
+      random_hidden_node = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), hidden_nodes)
+      x.genome[random_hidden_node].activation_function = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), x.list_activation_functions)
+      return 12, random_hidden_node
     end
   end
 
@@ -648,7 +682,7 @@ module NEATJulia
       end
     end
     if isnothing(output)
-      output = rand()
+      output = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), )
     end
     x.output[] = x.activation_function(output + x.bias)
     x.processed = true
@@ -672,7 +706,7 @@ module NEATJulia
       end
     end
     if isnothing(output)
-      output = rand()
+      output = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), )
     end
     x.output[] = x.activation_function(output + x.bias)
     x.processed = true
@@ -681,7 +715,7 @@ module NEATJulia
   function Run(x::Connection)
     if !(x.enabled) || !(x.in_node.enabled) || !(x.out_node.enabled)
       x.processed = true
-      x.output[] = rand()
+      x.output[] = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), )
       return
     end
     if !(x.in_node.processed)
@@ -791,54 +825,63 @@ module NEATJulia
         new_population[i].ID = i
       end
       for i = length(new_population)+1:x.population_size
-        crossover_probability = append!(x.crossover_probability[1:3], size(GetSpecieInfo(x, simple=true))[1]>1 ? x.crossover_probability[4:6] : [0,0,0])
+        crossover_probability = append!(x.crossover_probability[1:3], length(keys(x.species))>1 ? x.crossover_probability[4:6] : [0,0,0])
         crossover = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), [1,2,3,4,5,6], _custom_weights(crossover_probability))
         if crossover == 1 # intraspecie good and good
-          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
           specie2 = specie1
 
-          parent1 = rand(good_individuals[specie1])
-          parent2 = rand(good_individuals[specie2])
+          parent1 = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie1])
+          parent2 = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         elseif crossover == 2 # intraspecie good and bad
-          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
           specie2 = specie1
 
-          parent1 = rand(good_individuals[specie1])
-          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+          parent1 = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie2]) : rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         elseif crossover == 3 # intraspecie bad and bad
-          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
           specie2 = specie1
 
-          parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
-          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+          parent1 = isempty(bad_individuals[specie1]) ? rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie1]) : rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), bad_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie2]) : rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         elseif crossover == 4 # interspecie good and good
-          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
+          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
 
-          parent1 = rand(good_individuals[specie1])
-          parent2 = rand(good_individuals[specie2])
+          parent1 = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie1])
+          parent2 = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         elseif crossover == 5 # interspecie good and bad
-          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
+          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
 
-          parent1 = rand(good_individuals[specie1])
-          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+          parent1 = rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie2]) : rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         else # interspecie bad and bad
-          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
-          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          # specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie], _custom_weights(GetSpecieInfo(x, simple=true)[:,:mean_fitness]))
+          specie1 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
+          specie2 = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), GetSpecieInfo(x, simple=true)[:,:specie])
 
-          parent1 = isempty(bad_individuals[specie1]) ? rand(good_individuals[specie1]) : rand(bad_individuals[specie1])
-          parent2 = isempty(bad_individuals[specie2]) ? rand(good_individuals[specie2]) : rand(bad_individuals[specie2])
+          parent1 = isempty(bad_individuals[specie1]) ? rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie1]) : rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), bad_individuals[specie1])
+          parent2 = isempty(bad_individuals[specie2]) ? rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), good_individuals[specie2]) : rand(MersenneTwister(Int(round(modf(time())[1]*1e15))), bad_individuals[specie2])
 
           child = Crossover(parent1, parent2)
         end
