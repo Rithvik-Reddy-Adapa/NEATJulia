@@ -1,0 +1,12 @@
+digraph {
+	rankdir=LR;
+	node [shape=circle];
+	1->13[color=green,label="14,  0.013",penwidth=1.0];
+	1 [color=green]
+	{rank=same; 1}
+	13->2[color=green,label="15,  1.827",penwidth=1.0];
+	13 [color=green]
+	{rank=same; 13}
+	2 [color=green]
+	{rank=same; 2}
+}

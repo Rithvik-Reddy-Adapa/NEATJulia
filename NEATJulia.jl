@@ -398,10 +398,10 @@ module NEATJulia
 
   function Mutation(x::Genome)
     mutation = sample(MersenneTwister(Int(round(modf(time())[1]*1e15))), collect(1:x._n_mutations), _custom_weights(abs.(collect(GetMutationProbability(x)[1,:]))))
-    if x.mutation_probability[1, :add_connection][] < 0 && mutation != 4
+    if x.mutation_probability[1, :add_connection][] < 0 && mutation != 6
       x.mutation_probability[1, :add_connection][] *= 1.5
     end
-    if x.mutation_probability[1, :add_node][] < 0 && mutation != 5
+    if x.mutation_probability[1, :add_node][] < 0 && mutation != 7
       x.mutation_probability[1, :add_node][] *= 1.1
     end
 
