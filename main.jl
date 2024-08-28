@@ -24,10 +24,11 @@ function main()
 					     max_generation = 1_000,
 					     threshold_fitness = -1,
 					     fitness_function = fitness_function,
-					     list_activation_functions = [Tanh],
+					     list_activation_functions = [Sin],
 					     threshold_distance = 5,
 					     max_species_per_generation = 10,
 					     normalise_distance = false,
+					     start_fully_connected = true,
 					     )
   global neat_ffnn = NEAT_FFNN(config = neat_ffnn_config)
   neat_ffnn.mutation_probability = FFNN_Mutation_Probability[FFNN_Mutation_Probability(add_forward_connection = 0.5, add_node = 0.5) for i = 1:neat_ffnn.config.population_size]

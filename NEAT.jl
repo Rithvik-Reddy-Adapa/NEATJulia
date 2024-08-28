@@ -574,7 +574,7 @@ function Init(x::FFNN, start_fully_connected::Bool = false)
 
   if start_fully_connected
     for i = 1:x.n_inputs
-      for j = 1:n_outputs
+      for j = 1:x.n_outputs
         AddForwardConnection(x, i,j+x.n_inputs,maximum(keys(x.genes))+1)
       end
     end
