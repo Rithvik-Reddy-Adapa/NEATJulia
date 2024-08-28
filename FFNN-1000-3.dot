@@ -1,0 +1,42 @@
+digraph {
+	rankdir=LR;
+	node [shape=circle];
+	1 [color=green, shape=diamond]
+	1->2[color=green,label="3,  0.015",penwidth=1.0];
+	1->3807[color=green,label="3808,  0.011",penwidth=1.0];
+	{rank=min; 1}
+	3807 [color=green]
+	3807->2[color=green,label="3809,  1.15",penwidth=1.0];
+	3807->3826[color=red,label="3827,  0.969",penwidth=1.0];
+	3807->4604[color=green,label="4605,  1.328",penwidth=1.0];
+	3807->5196[color=green,label="5197,  0.666",penwidth=1.0];
+	{rank=same; 3807}
+	5196 [color=green]
+	5196->4604[color=red,label="5198,  1.158",penwidth=1.0];
+	5196->7276[color=red,label="7277,  0.948",penwidth=1.0];
+	5196->10160[color=green,label="10161,  0.957",penwidth=1.0];
+	{rank=same; 5196}
+	10160 [color=green]
+	10160->7276[color=green,label="10162,  1.125",penwidth=1.0];
+	{rank=same; 10160}
+	7276 [color=green]
+	7276->4604[color=green,label="7278,  0.834",penwidth=1.0];
+	{rank=same; 7276}
+	4604 [color=green]
+	4604->3826[color=red,label="4606,  1.0",penwidth=1.0];
+	4604->4610[color=green,label="4611,  0.48",penwidth=1.0];
+	4604->4782[color=green,label="4882,  0.43",penwidth=1.0];
+	{rank=same; 4604}
+	4610 [color=green]
+	4610->3826[color=green,label="4612,  1.546",penwidth=1.0];
+	{rank=same; 4610}
+	3826 [color=green]
+	3826->2[color=red,label="3828,  1.119",penwidth=1.0];
+	3826->4782[color=green,label="4783,  -1.771",penwidth=1.0];
+	{rank=same; 3826}
+	4782 [color=green]
+	4782->2[color=green,label="4784,  0.651",penwidth=1.0];
+	{rank=same; 4782}
+	2 [color=green, shape=box]
+	{rank=max; 2}
+}

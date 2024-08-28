@@ -18,9 +18,19 @@ function fitness_function(outputs, train_outputs; train_inputs = missing, networ
 end
 
 function main()
-  global neat_ffnn_config = NEAT_FFNN_config(n_inputs = 1, n_outputs = 1, population_size = 100, max_generation = 1_000, threshold_fitness = -1, fitness_function = fitness_function, list_activation_functions = [Tanh], threshold_distance = Inf)
+  global neat_ffnn_config = NEAT_FFNN_config(n_inputs = 1,
+					     n_outputs = 1,
+					     population_size = 100,
+					     max_generation = 1_000,
+					     threshold_fitness = -1,
+					     fitness_function = fitness_function,
+					     list_activation_functions = [Tanh],
+					     threshold_distance = 5,
+					     max_species_per_generation = 10,
+					     normalise_distance = false,
+					     )
   global neat_ffnn = NEAT_FFNN(config = neat_ffnn_config)
-  neat_ffnn.mutation_probability = FFNN_Mutation_Probability[FFNN_Mutation_Probability(add_connection = 0.5, add_node = 0.5) for i = 1:neat_ffnn.config.population_size]
+  neat_ffnn.mutation_probability = FFNN_Mutation_Probability[FFNN_Mutation_Probability(add_forward_connection = 0.5, add_node = 0.5) for i = 1:neat_ffnn.config.population_size]
   # neat_ffnn.train_inputs = [[0,0], [0,1], [1,0], [1,1]]
   # neat_ffnn.train_outputs = [[0], [1], [1], [0]]
   neat_ffnn.train_inputs = [[i] for i = -90:90]
