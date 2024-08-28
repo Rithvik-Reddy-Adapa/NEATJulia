@@ -2174,7 +2174,6 @@ function Speciate(x::NEATs)
   return
 end
 function Train(x::NEATs)
-  fitness = -Inf
   tn = time_ns()
   ts = time()
   for itr = 1:x.config.max_generation
@@ -2205,12 +2204,6 @@ function Train(x::NEATs)
     println("generation = $(x.generation|>Int), best fitness = $(x.fitness[x.winners[1].ID])")
     println(Dates.canonicalize(Dates.Nanosecond(time_ns()-tn)))
     println()
-    Save(x)
-    if x.fitness[x.winners[1].ID] >= fitness
-      fitness = x.fitness[x.winners[1].ID]
-    else
-      throw(error("Fitness reduced"))
-    end
     tn = time_ns()
     ts = time()
   end
