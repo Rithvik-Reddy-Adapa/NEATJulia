@@ -498,9 +498,9 @@ end
   shift_bias::Real = 2.0
   add_forward_connection::Real = -1e15
   add_node::Real = -1e10
-  disable_connection::Real = 0.0
+  disable_forward_connection::Real = 0.0
   disable_node::Real = 0.0
-  enable_connection::Real = 0.5
+  enable_forward_connection::Real = 0.5
   enable_node::Real = 0.5
   change_activation_function::Real = 0.0
 end
@@ -869,7 +869,7 @@ function Mutate(x::FFNN, y::FFNN_Mutation_Probability)
     end
 
     return 7, new_node.GIN, new_connection1.GIN, new_connection2.GIN
-  elseif mutation == 8 # disable connection
+  elseif mutation == 8 # disable forward connection
     network_info = GetNetworkInfo(x, true)
     GINs = network_info[(network_info[:,:type].<:Connections), :GIN]
     if isempty(GINs)
@@ -887,7 +887,7 @@ function Mutate(x::FFNN, y::FFNN_Mutation_Probability)
     random_node = rand(rng(), GINs)
     x.genes[random_node].enabled = false
     return 9, random_node
-  elseif mutation == 10 # enable connection
+  elseif mutation == 10 # enable forward connection
     network_info = GetNetworkInfo(x, false)
     GINs = network_info[(network_info[:,:type].<:Connections).||(network_info[:,:enabled].==false), :GIN]
     if isempty(GINs)
