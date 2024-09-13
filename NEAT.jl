@@ -2093,40 +2093,6 @@ function toDict(x::NEAT_RNN)
   return ret
 end
 
-# function Evaluate(x::NEAT_FFNN)
-#   @threads for i = 1:x.config.population_size
-#     x.fitness[i] = x.config.fitness_function_dict["fitness_function"](x.config.fitness_function_dict, x.population[i])
-#   end
-#
-#   winners = findall(x.fitness[.!ismissing.(x.fitness)].>=x.config.threshold_fitness)
-#   if isempty(winners)
-#     x.winners = Networks[x.population[argmax(x.fitness)]]
-#     x.n_networks_passed = 0x0
-#   else
-#     x.winners = x.population[winners]
-#     x.n_networks_passed = length(winners)
-#   end
-#
-#   temp = Dict{Unsigned, Real}(keys(x.species).=>-Inf)
-#   @threads for i in collect(x.species)
-#     fitness = x.fitness[getfield.(i.second, :ID)]
-#     x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)] # sort the population based on fitness
-#     fitness = fitness[sortperm(fitness, rev = true)]
-#     x.specie_info[i.first].minimum_fitness = fitness[end]
-#     x.specie_info[i.first].maximum_fitness = fitness[1]
-#     x.specie_info[i.first].mean_fitness = mean(fitness)
-#     temp[i.first] = x.specie_info[i.first].maximum_fitness
-#     if x.specie_info[i.first].last_highest_maximum_fitness < x.specie_info[i.first].maximum_fitness
-#       x.specie_info[i.first].last_highest_maximum_fitness = x.specie_info[i.first].maximum_fitness
-#       x.specie_info[i.first].last_improved_generation = x.generation
-#     end
-#     x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)]
-#   end
-#   specie = collect(keys(temp))[argmax(collect(values(temp)))]
-#   x.specie_info[specie].last_topped_generation = x.generation
-#
-#   return x.winners
-# end
 function Evaluate(x::NEATs)
   @threads for i = 1:x.config.population_size
     x.fitness[i] = x.config.fitness_function_dict["fitness_function"](x.config.fitness_function_dict, x.population[i])
@@ -2149,7 +2115,7 @@ function Evaluate(x::NEATs)
     x.specie_info[i.first].minimum_fitness = fitness[end]
     x.specie_info[i.first].maximum_fitness = fitness[1]
     x.specie_info[i.first].mean_fitness = mean(fitness)
-    temp[i.first] = x.specie_info[i.first].mean_fitness
+    temp[i.first] = x.specie_info[i.first].maximum_fitness
     if x.specie_info[i.first].last_highest_maximum_fitness < x.specie_info[i.first].maximum_fitness
       x.specie_info[i.first].last_highest_maximum_fitness = x.specie_info[i.first].maximum_fitness
       x.specie_info[i.first].last_improved_generation = x.generation
@@ -2411,6 +2377,7 @@ function Speciate(x::NEATs)
   return
 end
 function Train(x::NEATs)
+  prev_fitness = -Inf
   for itr = 1:x.config.max_generation
     start_time = time()
     Evaluate(x)
@@ -2419,6 +2386,13 @@ function Train(x::NEATs)
     else
       x.n_generations_passed = 0x0
     end
+
+    Save(x)
+    if x.fitness[x.winners[1].ID] < prev_fitness
+      println("prev_fitness = $(prev_fitness), fitness = $(x.fitness[x.winners[1].ID])")
+      sqrt(1)*"hello"
+    end
+    prev_fitness = x.fitness[x.winners[1].ID]
 
     if x.n_generations_passed >= x.config.n_generations_to_pass
       println("Congrats NEAT is trained in $(x.generation) generations")

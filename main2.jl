@@ -74,7 +74,7 @@ function main()
   global neat_rnn_config = NEAT_RNN_config(n_inputs = 2,
                                            n_outputs = 3,
                                            population_size = 100,
-                                           max_generation = 3_000,
+                                           max_generation = 10_000,
                                            threshold_fitness = -1,
                                            fitness_function_dict = fitness_function_dict,
                                            # list_activation_functions = [Tanh, Sigmoid, Sin, Relu, Identity],
