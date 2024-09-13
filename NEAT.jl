@@ -1,8 +1,9 @@
 
 module NEAT
 
-using Random, StatsBase, JLD2, DataFrames, Dates
+using Random, StatsBase, JLD2, DataFrames, Dates, Base.Threads
 import Base:show
+import Base:display
 import Base:getindex
 import Base:setindex!
 import Base:lastindex
@@ -13,10 +14,10 @@ Reference(x) = Reference{typeof(x)}(x)
 Reference{T}() where T = Reference{T}(missing)
 Reference{T}() where T<:Real = Reference{T}(NaN)
 
-export Genes, Nodes, Connections, InputNode, HiddenNode, OutputNode, ForwardConnection, Networks, FFNN, NEATs, NEAT_FFNN, NEAT_configs, NEAT_FFNN_config, Probabilities, CrossoverProbability, FFNN_Mutation_Probability, RecurrentInputNode, RecurrentOutputNode, RecurrentConnection, RNN_Mutation_Probability, RNN, NEAT_RNN_config, NEAT_RNN
+export Genes, Nodes, Connections, InputNode, HiddenNode, OutputNode, ForwardConnection, Networks, FFNN, NEATs, NEAT_FFNN, NEAT_configs, NEAT_FFNN_config, Probabilities, CrossoverProbability, FFNN_Mutation_Probability, RecurrentInputNode, RecurrentOutputNode, RecurrentConnection, RNN_Mutation_Probability, RNN, NEAT_RNN_config, NEAT_RNN, NEAT_Log_config
 export GIN, SpecieInfo
-export Init, Run, GetInput, SetInput!, GetOutput, GetLayers, GetNodePosition, GetNetworkInfo, AddForwardConnection, AddHiddenNode, Crossover, Mutate, Evaluate, RemoveStagnantSpecies, UpdatePopulation, GetNetworkDistance, Speciate, Train, toDict, Save, Load, Visualise, AddRecurrentConnection
-export Reference, show, getfield, getindex, setindex!, lastindex
+export Init, Run, GetInput, SetInput!, GetOutput, GetLayers, GetNodePosition, GetNetworkInfo, AddForwardConnection, AddHiddenNode, Crossover, Mutate, Evaluate, RemoveStagnantSpecies, UpdatePopulation, GetNetworkDistance, Speciate, Train, toDict, Save, Load, Visualise, AddRecurrentConnection, Reset
+export Reference, show, display, getfield, getindex, setindex!, lastindex
 export Identity, Relu, Sigmoid, Tanh, Sin
 
 abstract type Genes end
@@ -37,7 +38,7 @@ abstract type Probabilities end
   const enabled::Bool = true # to check if this input node is enabled or not, all input nodes are enabled always
   super::Union{Missing, Networks} = missing # points to the network containing this input node
 end
-function show(io::IO, ::MIME"text/plain", x::InputNode)
+function display(x::InputNode)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  input_number : $(x.input_number)
@@ -63,6 +64,12 @@ function toDict(x::InputNode)
             )
   return ret
 end
+function Reset(x::InputNode)
+  x.input[] = missing
+  x.output[] = missing
+  x.processed = false
+  return
+end
 function Run(x::InputNode)
   x.output[] = x.input[]
   x.processed = true
@@ -83,7 +90,7 @@ end
   const enabled::Bool = true # to check if this node is enabled or not
   super::Union{Missing, Networks} = missing # points to the network containing this node
 end
-function show(io::IO, ::MIME"text/plain", x::RecurrentInputNode)
+function display(x::RecurrentInputNode)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  input_number : $(x.input_number)
@@ -115,6 +122,14 @@ function toDict(x::RecurrentInputNode)
             )
   return ret
 end
+function Reset(x::RecurrentInputNode)
+  for i in x.input
+    i[] = missing
+  end
+  x.output[] = missing
+  x.processed = false
+  return
+end
 function Run(x::RecurrentInputNode)
   x.output[] = missing
   for i in x.input
@@ -143,7 +158,7 @@ end
   enabled::Bool = true # to check if this hidden node is enabled or not
   super::Union{Missing, Networks} = missing # points to the network containing this hidden node
 end
-function show(io::IO, ::MIME"text/plain", x::HiddenNode)
+function display(x::HiddenNode)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  in_connections : $(Int[i.GIN for i in x.in_connections])
@@ -172,6 +187,14 @@ function toDict(x::HiddenNode)
              "super" => ismissing(x.super) ? missing : x.super.ID,
             )
   return ret
+end
+function Reset(x::HiddenNode)
+  for i in x.input
+    i[] = missing
+  end
+  x.output[] = missing
+  x.processed = false
+  return
 end
 function Run(x::HiddenNode)
   if !x.enabled
@@ -222,7 +245,7 @@ end
   const enabled::Bool = true # to check if this hidden node is enabled or not, all output nodes are enabled always
   super::Union{Missing, Networks} = missing # points to the network containing this output node
 end
-function show(io::IO, ::MIME"text/plain", x::OutputNode)
+function display(x::OutputNode)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  in_connections : $(Int[i.GIN for i in x.in_connections])
@@ -251,6 +274,14 @@ function toDict(x::OutputNode)
              "super" => ismissing(x.super) ? missing : x.super.ID,
             )
   return ret
+end
+function Reset(x::OutputNode)
+  for i in x.input
+    i[] = missing
+  end
+  x.output[] = missing
+  x.processed = false
+  return
 end
 function Run(x::OutputNode)
   if isempty(x.in_connections)
@@ -297,7 +328,7 @@ end
   const enabled::Bool = true # to check if this node is enabled or not
   super::Union{Missing, Networks} = missing # points to the network containing this node
 end
-function show(io::IO, ::MIME"text/plain", x::RecurrentOutputNode)
+function display(x::RecurrentOutputNode)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  in_connections : $(Int[i.GIN for i in x.in_connections])
@@ -328,6 +359,14 @@ function toDict(x::RecurrentInputNode)
              "super" => ismissing(x.super) ? missing : x.super.ID,
             )
   return ret
+end
+function Reset(x::RecurrentOutputNode)
+  for i in x.input
+    i[] = missing
+  end
+  x.output[] = missing
+  x.processed = false
+  return
 end
 function Run(x::RecurrentOutputNode)
   if isempty(x.in_connections)
@@ -380,7 +419,7 @@ function Init(x::ForwardConnection)
   push!(x.out_node.input, x.output)
   return
 end
-function show(io::IO, ::MIME"text/plain", x::ForwardConnection)
+function display(x::ForwardConnection)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  in_node : $(x.in_node.GIN)
@@ -407,6 +446,12 @@ function toDict(x::ForwardConnection)
              "super" => ismissing(x.super) ? missing : x.super.ID,
             )
   return ret
+end
+function Reset(x::ForwardConnection)
+  x.input[] = missing
+  x.output[] = missing
+  x.processed = false
+  return
 end
 function Run(x::ForwardConnection)
   if !(x.enabled)
@@ -446,7 +491,7 @@ function Init(x::RecurrentConnection)
   push!(x.out_node.input, x.output)
   return
 end
-function show(io::IO, ::MIME"text/plain", x::RecurrentConnection)
+function display(x::RecurrentConnection)
   println(typeof(x))
   print(" GIN : $(x.GIN)
  in_node : $(x.in_node.GIN)
@@ -473,6 +518,11 @@ function toDict(x::RecurrentConnection)
              "super" => ismissing(x.super) ? missing : x.super.ID,
             )
   return ret
+end
+function Reset(x::RecurrentConnection)
+  x.input[] = missing
+  x.output[] = missing
+  return
 end
 function Run(x::RecurrentConnection)
   if !(x.enabled)
@@ -521,6 +571,9 @@ end
   enable_node::Real = 0.5
   enable_recurrent_connection::Real = 0.5
   change_activation_function::Real = 0.0
+  add_self_connection::Real = 1
+  enable_self_connection::Real = 0.5
+  disable_self_connection::Real = 0.5
 end
 
 @kwdef mutable struct GIN
@@ -529,10 +582,16 @@ end
   start_node::Unsigned
   stop_node::Unsigned
 end
-function show(io::IO, ::MIME"text/plain", x::GIN)
+function display(x::GIN)
   println(typeof(x))
   print(" GIN : $(x.GIN)\n type : $(x.type)\n start_node : $(x.start_node)\n stop_node : $(x.stop_node)\n")
-return
+  return
+end
+function display(x::Vector{GIN})
+  println("$(length(x))-element $(typeof(x)):")
+  for i in x
+    display(i)
+  end
 end
 function toDict(x::GIN)
   ret = Dict("GIN" => x.GIN,
@@ -541,6 +600,23 @@ function toDict(x::GIN)
              "stop_node" => x.stop_node,
             )
   return ret
+end
+
+function display(x::Networks)
+  println(typeof(x))
+  print(" ID : $(x.ID)\n")
+end
+function display(x::Vector{T}) where T <: Networks
+  println("$(length(x))-element $(typeof(x)):")
+  for i in x
+    display(i)
+  end
+end
+function display(x::Dict{U, Vector{T}}) where {T <: Networks, U <: Unsigned}
+  println("$(typeof(x)) with $(length(x)) entries:")
+  for i = sort(collect(keys(x)))
+    println(" $(i) => $(Int[j.ID for j in x[i]])")
+  end
 end
 
 @kwdef mutable struct FFNN <: Networks # FeedForward Neural Network
@@ -556,35 +632,33 @@ end
   super::Union{Missing, NEATs} = missing # points to the NEAT containing this network
 end
 function Init(x::FFNN, start_fully_connected::Bool = false)
-  layer = Nodes[]
-  for i = 1:x.n_inputs
-    push!(x.input, Reference{Real}())
+  layer = Vector{Nodes}(undef, x.n_inputs)
+  x.input = Vector{Reference{Real}}(undef, x.n_inputs)
+  @threads for i = 1:x.n_inputs
+    x.input[i] = Reference{Real}()
     x.genes[i] = InputNode(GIN = i, input_number = i, input = x.input[i], super = x)
-    push!(layer, x.genes[i])
+    layer[i] = x.genes[i]
   end
   push!(x.layers, layer)
 
-  layer = Nodes[]
-  for i = 1:x.n_outputs
-    push!(x.output, Reference{Real}())
+  layer = Vector{Nodes}(undef, x.n_outputs)
+  x.output = Vector{Reference{Real}}(undef, x.n_outputs)
+  @threads for i = 1:x.n_outputs
+    x.output[i] = Reference{Real}()
     x.genes[i+x.n_inputs] = OutputNode(GIN = i+x.n_inputs, output_number = i, output = x.output[i], activation_function = rand(rng(), x.list_activation_functions), super = x)
-    push!(layer, x.genes[i+x.n_inputs])
+    layer[i] = x.genes[i+x.n_inputs]
   end
   push!(x.layers, layer)
 
   if start_fully_connected
-    for i = 1:x.n_inputs
+    @threads for i = 1:x.n_inputs
       for j = 1:x.n_outputs
-        AddForwardConnection(x, i,j+x.n_inputs,maximum(keys(x.genes))+1)
+        AddForwardConnection(x, i,j+x.n_inputs, x.n_inputs+x.n_outputs + (i-1)*x.n_outputs + j )
       end
     end
   end
 
   return
-end
-function show(io::IO, ::MIME"text/plain", x::FFNN)
-  println(typeof(x))
-  print(" ID : $(x.ID)\n")
 end
 function toDict(x::FFNN)
   genes = Dict{Unsigned, Dict}()
@@ -658,6 +732,9 @@ function GetNodePosition(x::FFNN, y::Integer)
     end
   end
   return (layer_number, node_number)
+end
+function GetNodePosition(x::T) where T <: Nodes
+  return GetNodePosition(x.super, x.GIN)
 end
 function AddForwardConnection(x::FFNN, start_node_GIN::Integer, stop_node_GIN::Integer, new_GIN::Integer)
   start_node_GIN = Unsigned(start_node_GIN)
@@ -916,36 +993,25 @@ function Mutate(x::FFNN, y::FFNN_Mutation_Probability)
     return 12, random_node
   end
 end
-function GetNetworkDistance(x::FFNN, y::FFNN, distance_parameters::Vector{T} = [1,1,1], normalise::Bool = true) where T<:Real
+function GetNetworkDistance(x::FFNN, y::FFNN, distance_parameters::Vector{T} = [1,1,1], normalise::Bool = true) where T <: Real
   length(distance_parameters) == 3 || throw(error("distance_parameters should be of length 3"))
-  max_GIN = max(maximum(keys(x.genes)), maximum(keys(y.genes)))
-  x_GINs = keys(x.genes)
-  y_GINs = keys(y.genes)
 
-  x_connection_GINs = [i for i in x_GINs if typeof(x.genes[i])<:Connections]
-  y_connection_GINs = [i for i in y_GINs if typeof(y.genes[i])<:Connections]
+  x_GINs = collect(keys(x.genes))
+  y_GINs = collect(keys(y.genes))
 
-  x_connection_GINs = Bool[i in x_connection_GINs for i = 1:max_GIN]
-  y_connection_GINs = Bool[i in y_connection_GINs for i = 1:max_GIN]
+  common_GINs = intersect(x_GINs, y_GINs)
+  max_common_GIN = maximum(common_GINs)
 
-  x_GINs = Bool[i in x_GINs for i = 1:max_GIN]
-  y_GINs = Bool[i in y_GINs for i = 1:max_GIN]
+  uncommon_GINs = union(setdiff(x_GINs, y_GINs), setdiff(y_GINs, x_GINs))
 
-  common_GINs = x_GINs .&& y_GINs
-  idx_last_common_GIN = findlast(common_GINs)
-  non_common_GINs = xor.(x_GINs, y_GINs)
+  n_disjoint_GINs = isempty(uncommon_GINs) ? 0 : sum(uncommon_GINs .< max_common_GIN)
+  n_excess_GINs = isempty(uncommon_GINs) ? 0 : sum(uncommon_GINs .> max_common_GIN)
 
-  n_disjoint_GINs = sum(non_common_GINs[1:idx_last_common_GIN])
-  n_excess_GINs = sum(non_common_GINs[idx_last_common_GIN:end])
-
-  common_connection_GINs = x_connection_GINs .&& y_connection_GINs
-  sum_weights_difference = 0
-  for i in findall(common_connection_GINs)
-    sum_weights_difference += abs( x.genes[i].weight - y.genes[i].weight )
-  end
+  common_connection_GINs = common_GINs[typeof.(getindex.((x.genes,), common_GINs)).<:Connections]
+  sum_weights_difference = isempty(common_connection_GINs) ? 0 : sum( abs.(  getfield.(getindex.((x.genes,), common_connection_GINs), (:weight,))  .-  getfield.(getindex.((y.genes,), common_connection_GINs), (:weight,))  ) )
 
   if normalise
-    max_number_of_GINs = max(sum(x_GINs), sum(y_GINs))
+    max_number_of_GINs = max(length(x_GINs), length(y_GINs))
     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters ./ [max_number_of_GINs, max_number_of_GINs, 1]
   else
     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters
@@ -954,6 +1020,44 @@ function GetNetworkDistance(x::FFNN, y::FFNN, distance_parameters::Vector{T} = [
 
   return distance
 end
+# function GetNetworkDistance1(x::FFNN, y::FFNN, distance_parameters::Vector{T} = [1,1,1], normalise::Bool = true) where T<:Real
+#   length(distance_parameters) == 3 || throw(error("distance_parameters should be of length 3"))
+#   max_GIN = max(maximum(keys(x.genes)), maximum(keys(y.genes)))
+#   x_GINs = keys(x.genes)
+#   y_GINs = keys(y.genes)
+#
+#   x_connection_GINs = [i for i in x_GINs if typeof(x.genes[i])<:Connections]
+#   y_connection_GINs = [i for i in y_GINs if typeof(y.genes[i])<:Connections]
+#
+#   x_connection_GINs = Bool[i in x_connection_GINs for i = 1:max_GIN]
+#   y_connection_GINs = Bool[i in y_connection_GINs for i = 1:max_GIN]
+#
+#   x_GINs = Bool[i in x_GINs for i = 1:max_GIN]
+#   y_GINs = Bool[i in y_GINs for i = 1:max_GIN]
+#
+#   common_GINs = x_GINs .&& y_GINs
+#   idx_last_common_GIN = findlast(common_GINs)
+#   non_common_GINs = xor.(x_GINs, y_GINs)
+#
+#   n_disjoint_GINs = sum(non_common_GINs[1:idx_last_common_GIN])
+#   n_excess_GINs = sum(non_common_GINs[idx_last_common_GIN:end])
+#
+#   common_connection_GINs = x_connection_GINs .&& y_connection_GINs
+#   sum_weights_difference = 0
+#   for i in findall(common_connection_GINs)
+#     sum_weights_difference += abs( x.genes[i].weight - y.genes[i].weight )
+#   end
+#
+#   if normalise
+#     max_number_of_GINs = max(sum(x_GINs), sum(y_GINs))
+#     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters ./ [max_number_of_GINs, max_number_of_GINs, 1]
+#   else
+#     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters
+#   end
+#   distance = sum(distance)
+#
+#   return distance
+# end
 function GetNetworkInfo(x::FFNN, simple::Bool = true)
   ret = DataFrame(GIN = Unsigned[],
                   type = Type[],
@@ -975,6 +1079,13 @@ function GetNetworkInfo(x::FFNN, simple::Bool = true)
   return ret
 end
 
+function Reset(x::Networks)
+  for i in x.genes
+    Reset(i.second)
+  end
+  return
+end
+
 @kwdef mutable struct RNN <: Networks # Recurrent Neural Network
   ID::Unsigned = 0 # it's index in the population
   const n_inputs::Unsigned # number of inputs
@@ -988,36 +1099,34 @@ end
   super::Union{Missing, NEATs} = missing # points to the NEAT containing this network
 end
 function Init(x::RNN, start_fully_connected = true)
-  layer = Nodes[]
-  for i = 1:x.n_inputs
-    push!(x.input, Reference{Real}())
+  layer = Vector{Nodes}(undef, x.n_inputs)
+  x.input = Vector{Reference{Real}}(undef, x.n_inputs)
+  @threads for i = 1:x.n_inputs
+    x.input[i] = Reference{Real}()
     x.genes[i] = RecurrentInputNode(GIN = i, input_number = i, activation_function = rand(rng(), x.list_activation_functions), super = x)
     push!(x.genes[i].input, x.input[i])
-    push!(layer, x.genes[i])
+    layer[i] = x.genes[i]
   end
   push!(x.layers, layer)
 
-  layer = Nodes[]
-  for i = 1:x.n_outputs
-    push!(x.output, Reference{Real}())
+  layer = Vector{Nodes}(undef, x.n_outputs)
+  x.output = Vector{Reference{Real}}(undef, x.n_outputs)
+  @threads for i = 1:x.n_outputs
+    x.output[i] = Reference{Real}()
     x.genes[i+x.n_inputs] = RecurrentOutputNode(GIN = i+x.n_inputs, output_number = i, output = x.output[i], activation_function = rand(rng(), x.list_activation_functions), super = x)
-    push!(layer, x.genes[i+x.n_inputs])
+    layer[i] = x.genes[i+x.n_inputs]
   end
   push!(x.layers, layer)
 
   if start_fully_connected
-    for i = 1:x.n_inputs
+    @threads for i = 1:x.n_inputs
       for j = 1:x.n_outputs
-        AddForwardConnection(x, i,j+x.n_inputs,maximum(keys(x.genes))+1)
+        AddForwardConnection(x, i,j+x.n_inputs, x.n_inputs+x.n_outputs + (i-1)*x.n_outputs + j )
       end
     end
   end
 
   return
-end
-function show(io::IO, ::MIME"text/plain", x::RNN)
-  println(typeof(x))
-  print(" ID : $(x.ID)\n")
 end
 function toDict(x::RNN)
   genes = Dict{Unsigned, Dict}()
@@ -1209,36 +1318,25 @@ function AddHiddenNode(x::RNN, connection_GIN::Integer, new_GIN::Integer)
 
   return node, connection1, connection2
 end
-function GetNetworkDistance(x::RNN, y::RNN, distance_parameters::Vector{T} = [1,1,1], normalise::Bool = true) where T<:Real
+function GetNetworkDistance(x::RNN, y::RNN, distance_parameters::Vector{T} = [1,1,1], normalise::Bool = true) where T <: Real
   length(distance_parameters) == 3 || throw(error("distance_parameters should be of length 3"))
-  max_GIN = max(maximum(keys(x.genes)), maximum(keys(y.genes)))
-  x_GINs = keys(x.genes)
-  y_GINs = keys(y.genes)
 
-  x_connection_GINs = [i for i in x_GINs if typeof(x.genes[i])<:Connections]
-  y_connection_GINs = [i for i in y_GINs if typeof(y.genes[i])<:Connections]
+  x_GINs = collect(keys(x.genes))
+  y_GINs = collect(keys(y.genes))
 
-  x_connection_GINs = Bool[i in x_connection_GINs for i = 1:max_GIN]
-  y_connection_GINs = Bool[i in y_connection_GINs for i = 1:max_GIN]
+  common_GINs = intersect(x_GINs, y_GINs)
+  max_common_GIN = maximum(common_GINs)
 
-  x_GINs = Bool[i in x_GINs for i = 1:max_GIN]
-  y_GINs = Bool[i in y_GINs for i = 1:max_GIN]
+  uncommon_GINs = union(setdiff(x_GINs, y_GINs), setdiff(y_GINs, x_GINs))
 
-  common_GINs = x_GINs .&& y_GINs
-  idx_last_common_GIN = findlast(common_GINs)
-  non_common_GINs = xor.(x_GINs, y_GINs)
+  n_disjoint_GINs = isempty(uncommon_GINs) ? 0 : sum(uncommon_GINs .< max_common_GIN)
+  n_excess_GINs = isempty(uncommon_GINs) ? 0 : sum(uncommon_GINs .> max_common_GIN)
 
-  n_disjoint_GINs = sum(non_common_GINs[1:idx_last_common_GIN])
-  n_excess_GINs = sum(non_common_GINs[idx_last_common_GIN:end])
-
-  common_connection_GINs = x_connection_GINs .&& y_connection_GINs
-  sum_weights_difference = 0
-  for i in findall(common_connection_GINs)
-    sum_weights_difference += abs( x.genes[i].weight - y.genes[i].weight )
-  end
+  common_connection_GINs = common_GINs[typeof.(getindex.((x.genes,), common_GINs)).<:Connections]
+  sum_weights_difference = isempty(common_connection_GINs) ? 0 : sum( abs.(  getfield.(getindex.((x.genes,), common_connection_GINs), (:weight,))  .-  getfield.(getindex.((y.genes,), common_connection_GINs), (:weight,))  ) )
 
   if normalise
-    max_number_of_GINs = max(sum(x_GINs), sum(y_GINs))
+    max_number_of_GINs = max(length(x_GINs), length(y_GINs))
     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters ./ [max_number_of_GINs, max_number_of_GINs, 1]
   else
     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters
@@ -1247,6 +1345,44 @@ function GetNetworkDistance(x::RNN, y::RNN, distance_parameters::Vector{T} = [1,
 
   return distance
 end
+# function GetNetworkDistance1(x::RNN, y::RNN, distance_parameters::Vector{T} = [1,1,1], normalise::Bool = true) where T<:Real
+#   length(distance_parameters) == 3 || throw(error("distance_parameters should be of length 3"))
+#   max_GIN = max(maximum(keys(x.genes)), maximum(keys(y.genes)))
+#   x_GINs = keys(x.genes)
+#   y_GINs = keys(y.genes)
+#
+#   x_connection_GINs = [i for i in x_GINs if typeof(x.genes[i])<:Connections]
+#   y_connection_GINs = [i for i in y_GINs if typeof(y.genes[i])<:Connections]
+#
+#   x_connection_GINs = Bool[i in x_connection_GINs for i = 1:max_GIN]
+#   y_connection_GINs = Bool[i in y_connection_GINs for i = 1:max_GIN]
+#
+#   x_GINs = Bool[i in x_GINs for i = 1:max_GIN]
+#   y_GINs = Bool[i in y_GINs for i = 1:max_GIN]
+#
+#   common_GINs = x_GINs .&& y_GINs
+#   idx_last_common_GIN = findlast(common_GINs)
+#   non_common_GINs = xor.(x_GINs, y_GINs)
+#
+#   n_disjoint_GINs = sum(non_common_GINs[1:idx_last_common_GIN])
+#   n_excess_GINs = sum(non_common_GINs[idx_last_common_GIN:end])
+#
+#   common_connection_GINs = x_connection_GINs .&& y_connection_GINs
+#   sum_weights_difference = 0
+#   for i in findall(common_connection_GINs)
+#     sum_weights_difference += abs( x.genes[i].weight - y.genes[i].weight )
+#   end
+#
+#   if normalise
+#     max_number_of_GINs = max(sum(x_GINs), sum(y_GINs))
+#     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters ./ [max_number_of_GINs, max_number_of_GINs, 1]
+#   else
+#     distance = [n_disjoint_GINs, n_excess_GINs, sum_weights_difference] .* distance_parameters
+#   end
+#   distance = sum(distance)
+#
+#   return distance
+# end
 function Crossover(x::RNN, y::RNN, fitness_x::Real = Inf, fitness_y::Real = -Inf)
   if fitness_x >= fitness_y
     parent1 = x
@@ -1513,6 +1649,51 @@ function Mutate(x::RNN, y::RNN_Mutation_Probability)
     random_node = rand(rng(), GINs)
     x.genes[random_node].activation_function = rand(rng(), x.list_activation_functions)
     return 15, random_node
+  elseif mutation == 16 # add self connection
+    GINs = Unsigned[i.first for i in x.genes if (typeof(i.second)<:Nodes) && (i.second.enabled == true)]
+    if isempty(GINs)
+      return 16
+    end
+    start_node_GIN = 0
+    add_connection = false
+    for i = 1:50
+      start_node_GIN = rand(GINs)
+      start_node_GIN in getfield.(getfield.(x.genes[start_node_GIN].out_connections, :out_node), :GIN) ? (add_connection = false; continue) : (add_connection = true; break)
+    end
+
+    if add_connection
+      new_GIN = all( [getfield.(x.super.GIN, :start_node) getfield.(x.super.GIN, :stop_node)] .== [start_node_GIN start_node_GIN], dims = 2 )[:]
+      new_GIN = findfirst(new_GIN)
+      if isnothing(new_GIN)
+        new_GIN = x.super.GIN[end].GIN+1
+        new_connection = AddRecurrentConnection(x, start_node_GIN, start_node_GIN, new_GIN)
+        push!(x.super.GIN, GIN(new_connection.GIN, typeof(new_connection), new_connection.in_node.GIN, new_connection.out_node.GIN))
+
+        return 16, "new", new_connection.GIN
+      else
+        new_connection = AddRecurrentConnection(x, start_node_GIN, start_node_GIN, new_GIN)
+
+        return 16, "old", new_connection.GIN
+      end
+    else
+      return 16
+    end
+  elseif mutation == 17 # enable self connection
+    GINs = Unsigned[i.first for i in x.genes if (typeof(i.second)<:RecurrentConnection) && (i.second.enabled == false) && (i.second.in_node == i.second.out_node)]
+    if isempty(GINs)
+      return 17
+    end
+    random_connection = rand(GINs)
+    x.genes[random_connection].enabled = true
+    return 17, random_connection
+  elseif mutation == 18 # disable self connection
+    GINs = Unsigned[i.first for i in x.genes if (typeof(i.second)<:RecurrentConnection) && (i.second.enabled == true) && (i.second.in_node == i.second.out_node)]
+    if isempty(GINs)
+      return 18
+    end
+    random_connection = rand(GINs)
+    x.genes[random_connection].enabled = false
+    return 18, random_connection
   end
 end
 
@@ -1525,12 +1706,18 @@ end
   interspecie_bad_and_bad::Real = 1
 end
 
-function show(io::IO, ::MIME"text/plain", x::Probabilities)
+function display(x::Probabilities)
   println(typeof(x))
   for i in fieldnames(typeof(x))
     print(" $(string(i)) : $(getfield(x, i))\n")
   end
   return
+end
+function display(x::Vector{T}) where T <: Probabilities
+  println("$(length(x))-element $(typeof(x)):")
+  for i in x
+    display(i)
+  end
 end
 function lastindex(x::Probabilities)
   return length(fieldnames(typeof(x)))
@@ -1580,12 +1767,18 @@ end
   last_improved_generation::Unsigned = 0
   last_highest_maximum_fitness::Real = -Inf
 end
-function show(io::IO, ::MIME"text/plain", x::SpecieInfo)
+function display(x::SpecieInfo)
   println(typeof(x))
   for i in fieldnames(typeof(x))
     print(" $(string(i)) : $(getfield(x, i))\n")
   end
   return
+end
+function display(x::Vector{SpecieInfo})
+  println("$(length(x))-element $(typeof(x)):")
+  for i in x
+    display(i)
+  end
 end
 function toDict(x::SpecieInfo)
   ret = Dict()
@@ -1595,6 +1788,42 @@ function toDict(x::SpecieInfo)
   return ret
 end
 
+function Reset(x::NEATs)
+  for i in x.population
+    Reset(i)
+  end
+  return
+end
+
+
+@kwdef mutable struct NEAT_Log_config
+  log_to_console::Bool = true
+  log_to_file::Bool = true
+  filename::String = ""
+  delimeter::String = "<>"
+
+  log_initialisation::Bool = true
+
+  timestamp::Bool = true
+  NEAT_type::Bool = true
+  generation::Bool = true
+  best_networks::Bool = true
+  best_fitness::Bool = true
+  time_taken::Bool = true
+  species::Bool = false
+  max_GIN::Bool = false
+end
+function display(x::NEAT_Log_config)
+  println(typeof(x))
+  for i in fieldnames(NEAT_Log_config)
+    println(" $(i) : $(getfield(x, i))")
+  end
+  return
+end
+function toDict(x::NEAT_Log_config)
+  ret = Dict(string(i) => getfield(x, i) for i in fieldnames(typeof(x)))
+  return ret
+end
 
 @kwdef mutable struct NEAT_FFNN_config <: NEAT_configs
   const n_inputs::Unsigned
@@ -1604,7 +1833,7 @@ end
   threshold_fitness::Real
   n_networks_to_pass::Unsigned = 1
   n_generations_to_pass::Unsigned = 1
-  fitness_function::Function
+  fitness_function_dict::Dict{String, Any}
   max_weight::Real = 2.0
   min_weight::Real = -2.0
   max_shift_weight::Real = 0.1 # the maximum amount weights can be shifted during shift weight mutation
@@ -1622,8 +1851,9 @@ end
   start_fully_connected::Bool = false
   max_species_per_generation::Unsigned = 4
   initial_mutation_probability::FFNN_Mutation_Probability = FFNN_Mutation_Probability()
+  log_config::NEAT_Log_config = NEAT_Log_config()
 end
-function show(io::IO, ::MIME"text/plain", x::NEAT_FFNN_config)
+function display(x::NEAT_FFNN_config)
   println(typeof(x))
   return
 end
@@ -1635,7 +1865,7 @@ function toDict(x::NEAT_FFNN_config)
              "threshold_fitness" => x.threshold_fitness,
              "n_networks_to_pass" => x.n_networks_to_pass,
              "n_generations_to_pass" => x.n_generations_to_pass,
-             "fitness_function" => string(x.fitness_function),
+             "fitness_function_dict" => string(x.fitness_function_dict["fitness_function"]),
              "max_weight" => x.max_weight,
              "min_weight" => x.min_weight,
              "max_shift_weight" => x.max_shift_weight,
@@ -1653,6 +1883,7 @@ function toDict(x::NEAT_FFNN_config)
              "start_fully_connected" => x.start_fully_connected,
              "max_species_per_generation" => x.max_species_per_generation,
              "initial_mutation_probability" => toDict(x.initial_mutation_probability),
+             "log_config" => toDict(x.log_config),
             )
   return ret
 end
@@ -1662,8 +1893,6 @@ end
   GIN::Vector{GIN} = GIN[]
   population::Vector{Networks} = Networks[]
   generation::Unsigned = 0
-  train_inputs::Vector{Vector{Real}} = Vector{Real}[]
-  train_outputs::Vector{Vector{Real}} = Vector{Real}[]
   winners::Vector{Networks} = Networks[]
   fitness::Vector{Real} = Real[]
   mutation_probability::Vector{FFNN_Mutation_Probability} = FFNN_Mutation_Probability[]
@@ -1673,13 +1902,19 @@ end
   n_networks_passed::Unsigned = 0
 end
 function Init(x::NEAT_FFNN)
-  x.species[1] = Networks[]
-  for i = 1:x.config.population_size
-    push!(x.population, FFNN(ID = i, n_inputs = x.config.n_inputs, n_outputs = x.config.n_outputs, specie = 1, list_activation_functions = x.config.list_activation_functions, super = x))
-    Init(x.population[end], x.config.start_fully_connected)
-    push!(x.species[1], x.population[end])
-    push!(x.fitness, -Inf)
-    push!(x.mutation_probability, deepcopy(x.config.initial_mutation_probability))
+  isempty(x.config.log_config.filename) && (x.config.log_config.filename = "$(typeof(x)).log")
+  start_time = time()
+
+  x.population = Vector{Networks}(undef, x.config.population_size)
+  x.species[1] = Vector{Networks}(undef, x.config.population_size)
+  x.fitness = Vector{Real}(undef, x.config.population_size)
+  x.mutation_probability = Vector{FFNN_Mutation_Probability}(undef, x.config.population_size)
+  @threads for i = 1:x.config.population_size
+    x.population[i] = FFNN(ID = i, n_inputs = x.config.n_inputs, n_outputs = x.config.n_outputs, specie = 1, list_activation_functions = x.config.list_activation_functions, super = x)
+    Init(x.population[i], x.config.start_fully_connected)
+    x.species[1][i] = x.population[i]
+    x.fitness[i] = -Inf
+    x.mutation_probability[i] = deepcopy(x.config.initial_mutation_probability)
   end
   push!(x.specie_info, SpecieInfo(specie = 1, birth_generation = x.generation, last_improved_generation = x.generation))
 
@@ -1690,15 +1925,20 @@ function Init(x::NEAT_FFNN)
     push!(x.GIN, GIN(i+x.config.n_inputs, OutputNode, 0, 0))
   end
   if x.config.start_fully_connected
-    for i = 1:x.config.n_inputs
-      for j = 1:x.config.n_outputs
-        push!(x.GIN, GIN(length(x.GIN)+1, ForwardConnection, i, j+x.config.n_inputs))
+    append!(x.GIN, Vector{GIN}(undef, x.config.n_inputs*x.config.n_outputs))
+    @threads for i = 1:x.config.n_inputs
+      @threads for j = 1:x.config.n_outputs
+        x.GIN[x.config.n_inputs+x.config.n_outputs + (i-1)*x.config.n_outputs + j] = GIN(x.config.n_inputs+x.config.n_outputs + (i-1)*x.config.n_outputs + j , ForwardConnection, i, j+x.config.n_inputs)
       end
     end
   end
+
+  stop_time = time()
+  Log(x, start_time, stop_time, first_entry = true)
+
   return x
 end
-function show(io::IO, ::MIME"text/plain", x::NEAT_FFNN)
+function display(x::NEAT_FFNN)
   println(typeof(x))
   print(" generation : $(x.generation)\n")
   return
@@ -1708,8 +1948,6 @@ function toDict(x::NEAT_FFNN)
              "GIN" => toDict.(x.GIN),
              "population" => toDict.(x.population),
              "generation" => x.generation,
-             "train_inputs" => x.train_inputs,
-             "train_outputs" => x.train_outputs,
              "winners" => [i.ID for i in x.winners],
              "fitness" => x.fitness,
              "mutation_probability" => toDict.(x.mutation_probability),
@@ -1729,7 +1967,7 @@ end
   threshold_fitness::Real
   n_networks_to_pass::Unsigned = 1
   n_generations_to_pass::Unsigned = 1
-  fitness_function::Function
+  fitness_function_dict::Dict{String, Any}
   max_weight::Real = 2.0
   min_weight::Real = -2.0
   max_shift_weight::Real = 0.1 # the maximum amount weights can be shifted during shift weight mutation
@@ -1747,8 +1985,9 @@ end
   start_fully_connected::Bool = true
   max_species_per_generation::Unsigned = 4
   initial_mutation_probability::RNN_Mutation_Probability = RNN_Mutation_Probability()
+  log_config::NEAT_Log_config = NEAT_Log_config()
 end
-function show(io::IO, ::MIME"text/plain", x::NEAT_RNN_config)
+function display(x::NEAT_RNN_config)
   println(typeof(x))
   return
 end
@@ -1760,7 +1999,7 @@ function toDict(x::NEAT_RNN_config)
              "threshold_fitness" => x.threshold_fitness,
              "n_networks_to_pass" => x.n_networks_to_pass,
              "n_generations_to_pass" => x.n_generations_to_pass,
-             "fitness_function" => string(x.fitness_function),
+             "fitness_function_dict" => string(x.fitness_function_dict["fitness_function"]),
              "max_weight" => x.max_weight,
              "min_weight" => x.min_weight,
              "max_shift_weight" => x.max_shift_weight,
@@ -1778,6 +2017,7 @@ function toDict(x::NEAT_RNN_config)
              "start_fully_connected" => x.start_fully_connected,
              "max_species_per_generation" => x.max_species_per_generation,
              "initial_mutation_probability" => toDict(x.initial_mutation_probability),
+             "log_config" => toDict(x.log_config)
             )
   return ret
 end
@@ -1787,8 +2027,6 @@ end
   GIN::Vector{GIN} = GIN[]
   population::Vector{Networks} = Networks[]
   generation::Unsigned = 0
-  train_inputs::Vector{Vector{Vector{Real}}} = Vector{Vector{Vector{Real}}}()
-  train_outputs::Vector{Vector{Vector{Real}}} = Vector{Vector{Vector{Real}}}()
   winners::Vector{Networks} = Networks[]
   fitness::Vector{Real} = Real[]
   mutation_probability::Vector{RNN_Mutation_Probability} = RNN_Mutation_Probability[]
@@ -1798,13 +2036,19 @@ end
   n_networks_passed::Unsigned = 0
 end
 function Init(x::NEAT_RNN)
-  x.species[1] = Networks[]
-  for i = 1:x.config.population_size
-    push!(x.population, RNN(ID = i, n_inputs = x.config.n_inputs, n_outputs = x.config.n_outputs, specie = 1, list_activation_functions = x.config.list_activation_functions, super = x))
-    Init(x.population[end], x.config.start_fully_connected)
-    push!(x.species[1], x.population[end])
-    push!(x.fitness, -Inf)
-    push!(x.mutation_probability, deepcopy(x.config.initial_mutation_probability))
+  isempty(x.config.log_config.filename) && (x.config.log_config.filename = "$(typeof(x)).log")
+  start_time = time()
+
+  x.population = Vector{Networks}(undef, x.config.population_size)
+  x.species[1] = Vector{Networks}(undef, x.config.population_size)
+  x.fitness = Vector{Real}(undef, x.config.population_size)
+  x.mutation_probability = Vector{RNN_Mutation_Probability}(undef, x.config.population_size)
+  @threads for i = 1:x.config.population_size
+    x.population[i] = RNN(ID = i, n_inputs = x.config.n_inputs, n_outputs = x.config.n_outputs, specie = 1, list_activation_functions = x.config.list_activation_functions, super = x)
+    Init(x.population[i], x.config.start_fully_connected)
+    x.species[1][i] = x.population[i]
+    x.fitness[i] = -Inf
+    x.mutation_probability[i] = deepcopy(x.config.initial_mutation_probability)
   end
   push!(x.specie_info, SpecieInfo(specie = 1, birth_generation = x.generation, last_improved_generation = x.generation))
 
@@ -1815,15 +2059,20 @@ function Init(x::NEAT_RNN)
     push!(x.GIN, GIN(i+x.config.n_inputs, RecurrentOutputNode, 0, 0))
   end
   if x.config.start_fully_connected
-    for i = 1:x.config.n_inputs
-      for j = 1:x.config.n_outputs
-        push!(x.GIN, GIN(length(x.GIN)+1, ForwardConnection, i, j+x.config.n_inputs))
+    append!(x.GIN, Vector{GIN}(undef, x.config.n_inputs*x.config.n_outputs))
+    @threads for i = 1:x.config.n_inputs
+      @threads for j = 1:x.config.n_outputs
+        x.GIN[x.config.n_inputs+x.config.n_outputs + (i-1)*x.config.n_outputs + j] = GIN(x.config.n_inputs+x.config.n_outputs + (i-1)*x.config.n_outputs + j , ForwardConnection, i, j+x.config.n_inputs)
       end
     end
   end
+
+  stop_time = time()
+  Log(x, start_time, stop_time, first_entry = true)
+
   return x
 end
-function show(io::IO, ::MIME"text/plain", x::NEAT_RNN)
+function display(x::NEAT_RNN)
   println(typeof(x))
   print(" generation : $(x.generation)\n")
   return
@@ -1833,8 +2082,6 @@ function toDict(x::NEAT_RNN)
              "GIN" => toDict.(x.GIN),
              "population" => toDict.(x.population),
              "generation" => x.generation,
-             "train_inputs" => x.train_inputs,
-             "train_outputs" => x.train_outputs,
              "winners" => [i.ID for i in x.winners],
              "fitness" => x.fitness,
              "mutation_probability" => toDict.(x.mutation_probability),
@@ -1846,14 +2093,43 @@ function toDict(x::NEAT_RNN)
   return ret
 end
 
-function Evaluate(x::NEAT_FFNN)
-  for i = 1:x.config.population_size
-    outputs = []
-    for j = 1:length(x.train_inputs)
-      SetInput!(x.population[i], x.train_inputs[j])
-      push!(outputs, Run(x.population[i]))
-    end
-    x.fitness[i] = x.config.fitness_function(outputs, x.train_outputs, train_inputs = x.train_inputs, network = x.population[i], neat = x)
+# function Evaluate(x::NEAT_FFNN)
+#   @threads for i = 1:x.config.population_size
+#     x.fitness[i] = x.config.fitness_function_dict["fitness_function"](x.config.fitness_function_dict, x.population[i])
+#   end
+#
+#   winners = findall(x.fitness[.!ismissing.(x.fitness)].>=x.config.threshold_fitness)
+#   if isempty(winners)
+#     x.winners = Networks[x.population[argmax(x.fitness)]]
+#     x.n_networks_passed = 0x0
+#   else
+#     x.winners = x.population[winners]
+#     x.n_networks_passed = length(winners)
+#   end
+#
+#   temp = Dict{Unsigned, Real}(keys(x.species).=>-Inf)
+#   @threads for i in collect(x.species)
+#     fitness = x.fitness[getfield.(i.second, :ID)]
+#     x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)] # sort the population based on fitness
+#     fitness = fitness[sortperm(fitness, rev = true)]
+#     x.specie_info[i.first].minimum_fitness = fitness[end]
+#     x.specie_info[i.first].maximum_fitness = fitness[1]
+#     x.specie_info[i.first].mean_fitness = mean(fitness)
+#     temp[i.first] = x.specie_info[i.first].maximum_fitness
+#     if x.specie_info[i.first].last_highest_maximum_fitness < x.specie_info[i.first].maximum_fitness
+#       x.specie_info[i.first].last_highest_maximum_fitness = x.specie_info[i.first].maximum_fitness
+#       x.specie_info[i.first].last_improved_generation = x.generation
+#     end
+#     x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)]
+#   end
+#   specie = collect(keys(temp))[argmax(collect(values(temp)))]
+#   x.specie_info[specie].last_topped_generation = x.generation
+#
+#   return x.winners
+# end
+function Evaluate(x::NEATs)
+  @threads for i = 1:x.config.population_size
+    x.fitness[i] = x.config.fitness_function_dict["fitness_function"](x.config.fitness_function_dict, x.population[i])
   end
 
   winners = findall(x.fitness[.!ismissing.(x.fitness)].>=x.config.threshold_fitness)
@@ -1865,51 +2141,8 @@ function Evaluate(x::NEAT_FFNN)
     x.n_networks_passed = length(winners)
   end
 
-  temp = Dict{Unsigned, Real}()
-  for i in x.species
-    fitness = x.fitness[getfield.(i.second, :ID)]
-    x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)] # sort the population based on fitness
-    fitness = fitness[sortperm(fitness, rev = true)]
-    x.specie_info[i.first].minimum_fitness = fitness[end]
-    x.specie_info[i.first].maximum_fitness = fitness[1]
-    x.specie_info[i.first].mean_fitness = mean(fitness)
-    temp[i.first] = x.specie_info[i.first].maximum_fitness
-    if x.specie_info[i.first].last_highest_maximum_fitness < x.specie_info[i.first].maximum_fitness
-      x.specie_info[i.first].last_highest_maximum_fitness = x.specie_info[i.first].maximum_fitness
-      x.specie_info[i.first].last_improved_generation = x.generation
-    end
-    x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)]
-  end
-  specie = collect(keys(temp))[argmax(collect(values(temp)))]
-  x.specie_info[specie].last_topped_generation = x.generation
-
-  return x.winners
-end
-function Evaluate(x::NEAT_RNN)
-  for i = 1:x.config.population_size
-    outputs = []
-    for j = 1:length(x.train_inputs)
-      sequence_outputs = []
-      for k = 1:length(x.train_inputs[j])
-        SetInput!(x.population[i], x.train_inputs[j][k])
-        push!(sequence_outputs, Run(x.population[i]))
-      end
-      push!(outputs, sequence_outputs)
-    end
-    x.fitness[i] = x.config.fitness_function(outputs, x.train_outputs, train_inputs = x.train_inputs, network = x.population[i], neat = x)
-  end
-
-  winners = findall(x.fitness[.!ismissing.(x.fitness)].>=x.config.threshold_fitness)
-  if isempty(winners)
-    x.winners = Networks[x.population[argmax(x.fitness)]]
-    x.n_networks_passed = 0x0
-  else
-    x.winners = x.population[winners]
-    x.n_networks_passed = length(winners)
-  end
-
-  temp = Dict{Unsigned, Real}()
-  for i in x.species
+  temp = Dict{Unsigned, Real}(keys(x.species).=>-Inf)
+  @threads for i in collect(x.species)
     fitness = x.fitness[getfield.(i.second, :ID)]
     x.species[i.first] = x.species[i.first][sortperm(fitness, rev = true)] # sort the population based on fitness
     fitness = fitness[sortperm(fitness, rev = true)]
@@ -1934,7 +2167,7 @@ function RemoveStagnantSpecies(x::NEATs)
   ret = Unsigned[]
   to_delete = Unsigned[]
   # Making sure not to delete the fittest specie
-  for i in alive_species[1:end-1]
+  @threads for i in alive_species[1:end-1]
     if ( (x.generation - i.last_improved_generation) > x.config.max_specie_stagnation ) && ( (x.generation - i.last_topped_generation) > x.config.max_specie_stagnation )
       i.alive = false
       i.death_generation = x.generation
@@ -1948,7 +2181,7 @@ function RemoveStagnantSpecies(x::NEATs)
   x.population = x.population[ setdiff(1:length(x.population), to_delete) ]
   x.fitness = x.fitness[ setdiff(1:length(x.fitness), to_delete) ]
   x.mutation_probability = x.mutation_probability[ setdiff(1:length(x.mutation_probability), to_delete) ]
-  for i = enumerate(x.population)
+  @threads for i = collect(enumerate(x.population))
     i[2].ID = i[1]
   end
   return ret
@@ -2004,7 +2237,11 @@ function UpdatePopulation(x::NEATs)
     end
   end
 
-  for i = length(new_population)+1:x.config.population_size
+  new_population_length = length(new_population)
+  append!(new_population, Vector{Networks}(undef, x.config.population_size-new_population_length))
+  append!(new_fitness, Vector{Real}(undef, x.config.population_size-new_population_length))
+  append!(new_mutation_probability, Vector{typeof(x.mutation_probability[1])}(undef, x.config.population_size-new_population_length))
+  for i = new_population_length+1:x.config.population_size
     crossover_probability = [x.config.crossover_probability[1:3]; length(good_individuals)>1 ? x.config.crossover_probability[4:6] : [0,0,0]]
     crossover = sample(rng(), 1:length(x.config.crossover_probability), Weights(abs.(crossover_probability)))
 
@@ -2017,9 +2254,9 @@ function UpdatePopulation(x::NEATs)
 
       child = Crossover(parent1, parent2, x.fitness[parent1.ID], x.fitness[parent2.ID])
 
-      push!(new_population, child)
-      push!(new_fitness, -Inf)
-      push!(new_mutation_probability, typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... ))
+      new_population[i] = child
+      new_fitness[i] = -Inf
+      new_mutation_probability[i] = typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... )
     elseif crossover == 2 # intraspecie good and bad
       specie1 = rand(rng(), keys(good_individuals))
       specie2 = specie1
@@ -2033,9 +2270,9 @@ function UpdatePopulation(x::NEATs)
 
       child = Crossover(parent1, parent2, x.fitness[parent1.ID], x.fitness[parent2.ID])
 
-      push!(new_population, child)
-      push!(new_fitness, -Inf)
-      push!(new_mutation_probability, typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... ))
+      new_population[i] = child
+      new_fitness[i] = -Inf
+      new_mutation_probability[i] = typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... )
     elseif crossover == 3 # intraspecie bad and bad
       specie1 = rand(rng(), keys(good_individuals))
       specie2 = specie1
@@ -2053,9 +2290,9 @@ function UpdatePopulation(x::NEATs)
 
       child = Crossover(parent1, parent2, x.fitness[parent1.ID], x.fitness[parent2.ID])
 
-      push!(new_population, child)
-      push!(new_fitness, -Inf)
-      push!(new_mutation_probability, typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... ))
+      new_population[i] = child
+      new_fitness[i] = -Inf
+      new_mutation_probability[i] = typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... )
     elseif crossover == 4 # interspecie good and good
       specie1 = rand(rng(), keys(good_individuals))
       specie2 = rand(rng(), setdiff(keys(good_individuals), specie1))
@@ -2065,9 +2302,9 @@ function UpdatePopulation(x::NEATs)
 
       child = Crossover(parent1, parent2, x.fitness[parent1.ID], x.fitness[parent2.ID])
 
-      push!(new_population, child)
-      push!(new_fitness, -Inf)
-      push!(new_mutation_probability, typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... ))
+      new_population[i] = child
+      new_fitness[i] = -Inf
+      new_mutation_probability[i] = typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... )
     elseif crossover == 5 # interspecie good and bad
       specie1 = rand(rng(), keys(good_individuals))
       specie2 = rand(rng(), setdiff(keys(good_individuals), specie1))
@@ -2081,9 +2318,9 @@ function UpdatePopulation(x::NEATs)
 
       child = Crossover(parent1, parent2, x.fitness[parent1.ID], x.fitness[parent2.ID])
 
-      push!(new_population, child)
-      push!(new_fitness, -Inf)
-      push!(new_mutation_probability, typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... ))
+      new_population[i] = child
+      new_fitness[i] = -Inf
+      new_mutation_probability[i] = typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... )
     elseif crossover == 6 # interspecie bad and bad
       specie1 = rand(rng(), keys(good_individuals))
       specie2 = rand(rng(), setdiff(keys(good_individuals), specie1))
@@ -2101,13 +2338,13 @@ function UpdatePopulation(x::NEATs)
 
       child = Crossover(parent1, parent2, x.fitness[parent1.ID], x.fitness[parent2.ID])
 
-      push!(new_population, child)
-      push!(new_fitness, -Inf)
-      push!(new_mutation_probability, typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... ))
+      new_population[i] = child
+      new_fitness[i] = -Inf
+      new_mutation_probability[i] = typeof(x.mutation_probability[1])( (x.mutation_probability[parent1.ID][:] .+ x.mutation_probability[parent2.ID][:])./2.0... )
     end
 
-    new_population[end].ID = i
-    Mutate(new_population[end], new_mutation_probability[end])
+    new_population[i].ID = i
+    Mutate(new_population[i], new_mutation_probability[i])
   end
 
   x.population = new_population
@@ -2174,9 +2411,8 @@ function Speciate(x::NEATs)
   return
 end
 function Train(x::NEATs)
-  tn = time_ns()
-  ts = time()
   for itr = 1:x.config.max_generation
+    start_time = time()
     Evaluate(x)
     if x.n_networks_passed >= x.config.n_networks_to_pass
       x.n_generations_passed += 0x1
@@ -2190,22 +2426,13 @@ function Train(x::NEATs)
       return
     end
 
-    if x.generation >= x.config.max_generation
-      println("Max generation reached, training terminated")
-      println("Winners: $([i.ID for i in x.winners])")
-      return
-    end
-
     RemoveStagnantSpecies(x)
     UpdatePopulation(x)
     Speciate(x)
 
     x.generation += 0x1
-    println("generation = $(x.generation|>Int), best fitness = $(x.fitness[x.winners[1].ID])")
-    println(Dates.canonicalize(Dates.Nanosecond(time_ns()-tn)))
-    println()
-    tn = time_ns()
-    ts = time()
+    stop_time = time()
+    Log(x, start_time, stop_time)
   end
 
   Evaluate(x)
@@ -2213,16 +2440,65 @@ function Train(x::NEATs)
   println("Winners: $([i.ID for i in x.winners])")
   return
 end
+function Log(x::NEATs, start_time::Float64 = time(), stop_time::Float64 = time(); first_entry::Bool = false)
+  if x.config.log_config.log_to_file
+    deli::String= x.config.log_config.delimeter
+    text::String = ""
+    if first_entry
+      x.config.log_config.timestamp && (text *= "timestamp$(deli)")
+      x.config.log_config.NEAT_type && (text *= "NEAT_type$(deli)")
+      x.config.log_config.generation && (text *= "generation$(deli)")
+      x.config.log_config.best_networks && (text *= "best_networks$(deli)")
+      x.config.log_config.best_fitness && (text *= "best_fitness$(deli)")
+      x.config.log_config.time_taken && (text *= "time_taken (sec)$(deli)")
+      x.config.log_config.species && (text *= "species$(deli)")
+      x.config.log_config.max_GIN && (text *= "max_GIN$(deli)")
+      text *= "\n"
+      open(x.config.log_config.filename, "w") do f
+        write(f, text)
+      end
+    end
 
-function show(io::IO, ::MIME"text/plain", x::Tuple{Vararg{Genes}})
-  println(typeof(x))
+    text = ""
+    x.config.log_config.timestamp && (text *= "$(now())$(deli)")
+    x.config.log_config.NEAT_type && (text *= "$(typeof(x))$(deli)")
+    x.config.log_config.generation && (text *= "$(x.generation)$(deli)")
+    x.config.log_config.best_networks && (text *= "$([i.ID for i in x.winners])$(deli)")
+    x.config.log_config.best_fitness && (text *= "$([x.fitness[i.ID] for i in x.winners])$(deli)")
+    x.config.log_config.time_taken && (text *= "$(stop_time - start_time)$(deli)")
+    x.config.log_config.species && (text *= "$([i.first for i in x.species])$(deli)")
+    x.config.log_config.max_GIN && (text *= "$([x.GIN[end].GIN, x.GIN[end].type, x.GIN[end].start_node, x.GIN[end].stop_node])$(deli)")
+    text *= "\n"
+    open(x.config.log_config.filename, "a") do f
+      write(f, text)
+    end
+  end
+
+  if x.config.log_config.log_to_console
+    x.config.log_config.timestamp && (print("timestamp = $(now()), "))
+    x.config.log_config.NEAT_type && (print("NEAT_type = $(typeof(x)), "))
+    x.config.log_config.generation && (print("generation = $(x.generation), "))
+    x.config.log_config.best_networks && (print("best_networks = $([i.ID for i in x.winners]), "))
+    x.config.log_config.best_fitness && (print("best_fitness = $([x.fitness[i.ID] for i in x.winners]), "))
+    x.config.log_config.time_taken && (print("time_taken (sec) = $(Dates.canonicalize(Dates.Nanosecond(Int128(round((stop_time - start_time)*1e9))))), "))
+    x.config.log_config.species && (print("species = $([i.first for i in x.species]), "))
+    x.config.log_config.max_GIN && (print("max_GIN = $([x.GIN[end].GIN, x.GIN[end].type, x.GIN[end].start_node, x.GIN[end].stop_node]), "))
+    println()
+    println()
+  end
+
+  return
+end
+
+function display(x::Tuple{Vararg{Genes}})
+  println("$(length(x))-element $(typeof(x)):")
   for i in x
     display(i)
   end
   return
 end
-function show(io::IO, ::MIME"text/plain", x::Tuple{Vararg{Networks}})
-  println(typeof(x))
+function display(x::Tuple{Vararg{Networks}})
+  println("$(length(x))-element $(typeof(x)):")
   for i in x
     display(i)
     if i != x[end]
@@ -2231,22 +2507,22 @@ function show(io::IO, ::MIME"text/plain", x::Tuple{Vararg{Networks}})
   end
   return
 end
-function show(io::IO, ::MIME"text/plain", x::Dict{Unsigned, T}) where T<:Genes
-  println(typeof(x))
+function display(x::Dict{Unsigned, T}) where T<:Genes
+  println("$(typeof(x)) with $(length(x)) entries:")
   for i = sort(collect(keys(x)))
-    print("$(i) => $(typeof(x[i]))\n")
+    print(" $(i) => $(typeof(x[i]))\n")
   end
   return
 end
-# function show(io::IO, ::MIME"text/plain", x::Vector{Genes})
-#   println("$(length(x))-element $(typeof(x))")
-#   for i in x
-#     display(i)
-#     if i != x[end]
-#       println()
-#     end
-#   end
-# end
+function display(x::Vector{T}) where T <: Genes
+  println("$(length(x))-element $(typeof(x)):")
+  for i in x
+    display(i)
+    if i != x[end]
+      println()
+    end
+  end
+end
 
 function Save(x::NEATs, filename::String = "")
   isempty(filename) && (filename = "$(typeof(x))-$(x.generation).jld2")
@@ -2276,24 +2552,25 @@ function Visualise(x::Networks; directed::Bool = true, rankdir_LR::Bool = true, 
     graphviz_code *= "\trankdir=LR;\n"
   end
   graphviz_code *= "\tnode [shape=circle];\n"
-  for l in x.layers
+  for (li,l) in enumerate(x.layers)
+    # graphviz_code *= "\tsubgraph cluster_$(li-1) {\n\t\tlabel=\"Layer $(li)\";\n\t\tstyle=invisible;\n"
     if l == x.layers[1]
-      temp = "\t{rank=min; "
+      temp = "\t\t{rank=min; "
     elseif l == x.layers[end]
-      temp = "\t{rank=max; "
+      temp = "\t\t{rank=max; "
     else
-      temp = "\t{rank=same; "
+      temp = "\t\t{rank=same; "
     end
     for n in l
       if simple && !n.enabled
         continue
       end
       if l == x.layers[1]
-        graphviz_code *= "\t$(n.GIN) [color=green, shape=diamond]\n"
+        graphviz_code *= "\t\t$(n.GIN) [color=green, shape=diamond];\n"
       elseif l == x.layers[end]
-        graphviz_code *= "\t$(n.GIN) [color=green, shape=box]\n"
+        graphviz_code *= "\t\t$(n.GIN) [color=green, shape=box];\n"
       else
-        graphviz_code *= n.enabled ? "\t$(n.GIN) [color=green]\n" : "\t$(n.GIN) [color=red]\n"
+        graphviz_code *= n.enabled ? "\t\t$(n.GIN) [color=green];\n" : "\t\t$(n.GIN) [color=red];\n"
       end
       temp *= "$(n.GIN), "
       if !(typeof(n) <: OutputNode)
@@ -2302,9 +2579,9 @@ function Visualise(x::Networks; directed::Bool = true, rankdir_LR::Bool = true, 
             continue
           end
           if directed
-            graphviz_code *= "\t$(n.GIN)->$(c.out_node.GIN)"
+            graphviz_code *= "\t\t$(n.GIN)->$(c.out_node.GIN)"
           else
-            graphviz_code *= "\t$(n.GIN)--$(c.out_node.GIN)"
+            graphviz_code *= "\t\t$(n.GIN)--$(c.out_node.GIN)"
           end
           graphviz_code *= "["
           if c.enabled
@@ -2322,8 +2599,9 @@ function Visualise(x::Networks; directed::Bool = true, rankdir_LR::Bool = true, 
         end
       end
     end
-    temp = temp[1:end-2] * "}\n"
+    temp = temp[1:end-2] * "};\n"
     graphviz_code *= temp
+    # graphviz_code *= "\t}\n"
   end
 
   if directed
