@@ -2377,7 +2377,6 @@ function Speciate(x::NEATs)
   return
 end
 function Train(x::NEATs)
-  prev_fitness = -Inf
   for itr = 1:x.config.max_generation
     start_time = time()
     Evaluate(x)
@@ -2386,13 +2385,6 @@ function Train(x::NEATs)
     else
       x.n_generations_passed = 0x0
     end
-
-    Save(x)
-    if x.fitness[x.winners[1].ID] < prev_fitness
-      println("prev_fitness = $(prev_fitness), fitness = $(x.fitness[x.winners[1].ID])")
-      sqrt(1)*"hello"
-    end
-    prev_fitness = x.fitness[x.winners[1].ID]
 
     if x.n_generations_passed >= x.config.n_generations_to_pass
       println("Congrats NEAT is trained in $(x.generation) generations")
