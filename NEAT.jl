@@ -1833,7 +1833,7 @@ end
   threshold_fitness::Real
   n_networks_to_pass::Unsigned = 1
   n_generations_to_pass::Unsigned = 1
-  fitness_function_dict::Dict{String, Any}
+  fitness_test_dict::Dict{String, Any}
   max_weight::Real = 2.0
   min_weight::Real = -2.0
   max_shift_weight::Real = 0.1 # the maximum amount weights can be shifted during shift weight mutation
@@ -1865,7 +1865,7 @@ function toDict(x::NEAT_FFNN_config)
              "threshold_fitness" => x.threshold_fitness,
              "n_networks_to_pass" => x.n_networks_to_pass,
              "n_generations_to_pass" => x.n_generations_to_pass,
-             "fitness_function_dict" => string(x.fitness_function_dict["fitness_function"]),
+             "fitness_test_dict" => string(x.fitness_test_dict["fitness_function"]),
              "max_weight" => x.max_weight,
              "min_weight" => x.min_weight,
              "max_shift_weight" => x.max_shift_weight,
@@ -1967,7 +1967,7 @@ end
   threshold_fitness::Real
   n_networks_to_pass::Unsigned = 1
   n_generations_to_pass::Unsigned = 1
-  fitness_function_dict::Dict{String, Any}
+  fitness_test_dict::Dict{String, Any}
   max_weight::Real = 2.0
   min_weight::Real = -2.0
   max_shift_weight::Real = 0.1 # the maximum amount weights can be shifted during shift weight mutation
@@ -1999,7 +1999,7 @@ function toDict(x::NEAT_RNN_config)
              "threshold_fitness" => x.threshold_fitness,
              "n_networks_to_pass" => x.n_networks_to_pass,
              "n_generations_to_pass" => x.n_generations_to_pass,
-             "fitness_function_dict" => string(x.fitness_function_dict["fitness_function"]),
+             "fitness_test_dict" => string(x.fitness_test_dict["fitness_function"]),
              "max_weight" => x.max_weight,
              "min_weight" => x.min_weight,
              "max_shift_weight" => x.max_shift_weight,
@@ -2095,7 +2095,7 @@ end
 
 function Evaluate(x::NEATs)
   @threads for i = 1:x.config.population_size
-    x.fitness[i] = x.config.fitness_function_dict["fitness_function"](x.config.fitness_function_dict, x.population[i])
+    x.fitness[i] = x.config.fitness_test_dict["fitness_function"](x.config.fitness_test_dict, x.population[i])
   end
 
   winners = findall(x.fitness[.!ismissing.(x.fitness)].>=x.config.threshold_fitness)

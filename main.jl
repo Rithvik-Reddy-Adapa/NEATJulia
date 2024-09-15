@@ -2,11 +2,11 @@ include("./NEAT.jl")
 using .NEAT
 using Debugger, DataFrames, JSON, JSON3
 
-fitness_function_dict = Dict{String, Any}()
-# fitness_function_dict["train_inputs"] = [[0,0], [0,1], [1,0], [1,1]]
-# fitness_function_dict["train_outputs"] = [[0], [1], [1], [0]]
-fitness_function_dict["train_inputs"] = [[i] for i = -90:90]
-fitness_function_dict["train_outputs"] = [[sind(i[1])] for i in fitness_function_dict["train_inputs"]]
+fitness_test_dict = Dict{String, Any}()
+# fitness_test_dict["train_inputs"] = [[0,0], [0,1], [1,0], [1,1]]
+# fitness_test_dict["train_outputs"] = [[0], [1], [1], [0]]
+fitness_test_dict["train_inputs"] = [[i] for i = -90:90]
+fitness_test_dict["train_outputs"] = [[sind(i[1])] for i in fitness_test_dict["train_inputs"]]
 
 function fitness_function(dict::Dict{String, Any}, network::N) where N <: Networks
   ret = 0.0
@@ -24,7 +24,7 @@ function fitness_function(dict::Dict{String, Any}, network::N) where N <: Networ
   end
   return ret
 end
-fitness_function_dict["fitness_function"] = fitness_function
+fitness_test_dict["fitness_function"] = fitness_function
 
 function main()
   global neat_ffnn_config = NEAT_FFNN_config(n_inputs = 1,
@@ -32,7 +32,7 @@ function main()
 					     population_size = 100,
 					     max_generation = 1_000,
 					     threshold_fitness = -1,
-					     fitness_function_dict = fitness_function_dict,
+					     fitness_test_dict = fitness_test_dict,
 					     list_activation_functions = [Tanh],
 					     threshold_distance = 5,
 					     max_species_per_generation = 10,
