@@ -16,7 +16,7 @@ Reference{T}() where T<:Real = Reference{T}(NaN)
 
 export Genes, Nodes, Connections, InputNode, HiddenNode, OutputNode, ForwardConnection, Networks, FFNN, NEATs, NEAT_FFNN, NEAT_configs, NEAT_FFNN_config, Probabilities, CrossoverProbability, FFNN_Mutation_Probability, RecurrentInputNode, RecurrentOutputNode, RecurrentConnection, RNN_Mutation_Probability, RNN, NEAT_RNN_config, NEAT_RNN, NEAT_Log_config
 export GIN, SpecieInfo
-export Init, Run, GetInput, SetInput!, GetOutput, GetLayers, GetNodePosition, GetNetworkInfo, AddForwardConnection, AddHiddenNode, Crossover, Mutate, Evaluate, RemoveStagnantSpecies, UpdatePopulation, GetNetworkDistance, Speciate, Train, toDict, Save, Load, Visualise, AddRecurrentConnection, Reset
+export Init, Run, GetInput, SetInput!, GetOutput, GetLayers, GetNodePosition, GetNetworkInfo, AddForwardConnection, AddHiddenNode, Crossover, Mutate, Evaluate, RemoveStagnantSpecies, UpdatePopulation, GetNetworkDistance, Speciate, Train, toDict, Save, Load, Visualise, AddRecurrentConnection, Reset!
 export Reference, show, display, getfield, getindex, setindex!, lastindex
 export Identity, Relu, Sigmoid, Tanh, Sin
 
@@ -64,7 +64,7 @@ function toDict(x::InputNode)
             )
   return ret
 end
-function Reset(x::InputNode)
+function Reset!(x::InputNode)
   x.input[] = missing
   x.output[] = missing
   x.processed = false
@@ -122,7 +122,7 @@ function toDict(x::RecurrentInputNode)
             )
   return ret
 end
-function Reset(x::RecurrentInputNode)
+function Reset!(x::RecurrentInputNode)
   for i in x.input
     i[] = missing
   end
@@ -188,7 +188,7 @@ function toDict(x::HiddenNode)
             )
   return ret
 end
-function Reset(x::HiddenNode)
+function Reset!(x::HiddenNode)
   for i in x.input
     i[] = missing
   end
@@ -275,7 +275,7 @@ function toDict(x::OutputNode)
             )
   return ret
 end
-function Reset(x::OutputNode)
+function Reset!(x::OutputNode)
   for i in x.input
     i[] = missing
   end
@@ -360,7 +360,7 @@ function toDict(x::RecurrentInputNode)
             )
   return ret
 end
-function Reset(x::RecurrentOutputNode)
+function Reset!(x::RecurrentOutputNode)
   for i in x.input
     i[] = missing
   end
@@ -447,7 +447,7 @@ function toDict(x::ForwardConnection)
             )
   return ret
 end
-function Reset(x::ForwardConnection)
+function Reset!(x::ForwardConnection)
   x.input[] = missing
   x.output[] = missing
   x.processed = false
@@ -519,7 +519,7 @@ function toDict(x::RecurrentConnection)
             )
   return ret
 end
-function Reset(x::RecurrentConnection)
+function Reset!(x::RecurrentConnection)
   x.input[] = missing
   x.output[] = missing
   return
@@ -1079,9 +1079,9 @@ function GetNetworkInfo(x::FFNN, simple::Bool = true)
   return ret
 end
 
-function Reset(x::Networks)
+function Reset!(x::Networks)
   for i in x.genes
-    Reset(i.second)
+    Reset!(i.second)
   end
   return
 end
@@ -1788,9 +1788,9 @@ function toDict(x::SpecieInfo)
   return ret
 end
 
-function Reset(x::NEATs)
+function Reset!(x::NEATs)
   for i in x.population
-    Reset(i)
+    Reset!(i)
   end
   return
 end

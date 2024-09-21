@@ -52,7 +52,7 @@ fitness_test_dict["train_outputs"] = train_outputs
 function fitness_function(dict::Dict{String, Any}, network::N) where N <: Networks
   ret = 0.0
   for (is,os) in zip(dict["train_inputs"], dict["train_outputs"]) # is = input_sequence, os = output_sequence
-    Reset(network)
+    Reset!(network)
     for (ei,eo) in zip(is, os) # ei = expected input, eo = expected output
       SetInput!(network, ei)
       output = Run(network)

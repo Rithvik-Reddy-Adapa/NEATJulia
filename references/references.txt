@@ -6,3 +6,6 @@ https://www.youtube.com/watch?v=9gQQAO4I1Ck
 https://github.com/CodeReclaimers/neat-python
 https://github.com/Andy-P/NEAT.jl
 https://github.com/wagenaartje/neataptic
+https://github.com/RubenPants/EvolvableRNN
+
+https://colah.github.io/posts/2015-08-Understanding-LSTMs/
