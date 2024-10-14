@@ -24,11 +24,11 @@ function Log(x::NEAT, start_time::Float64 = time(), stop_time::Float64 = time();
     text = ""
     x.neat_config.log_config.timestamp && (text *= "$(now())$(deli)")
     x.neat_config.log_config.generation && (text *= "$(x.generation)$(deli)")
-    x.neat_config.log_config.best_networks && (text *= "$([i.idx for i in x.winners])$(deli)")
-    x.neat_config.log_config.best_fitness && (text *= "$([x.fitness[i.idx] for i in x.winners])$(deli)")
+    x.neat_config.log_config.best_networks && (text *= "$(join([i.idx for i in x.winners], ", "))$(deli)")
+    x.neat_config.log_config.best_fitness && (text *= "$(join([x.fitness[i.idx] for i in x.winners], ", "))$(deli)")
     x.neat_config.log_config.time_taken && (text *= "$(stop_time - start_time)$(deli)")
-    x.neat_config.log_config.species && (text *= "$([i.first for i in x.species])$(deli)")
-    x.neat_config.log_config.max_GIN && (text *= "$([x.GIN.GIN[end], x.GIN.type[end], x.GIN.start_node[end], x.GIN.stop_node[end]])$(deli)")
+    x.neat_config.log_config.species && (text *= "$(join(sort(collect(keys(x.species))), ", "))$(deli)")
+    x.neat_config.log_config.max_GIN && (text *= "$(join([x.GIN.GIN[end], x.GIN.type[end], x.GIN.start_node[end], x.GIN.stop_node[end]], ", "))$(deli)")
     text *= "\n"
     open(x.neat_config.log_config.filename, "a") do f
       write(f, text)
@@ -36,13 +36,13 @@ function Log(x::NEAT, start_time::Float64 = time(), stop_time::Float64 = time();
   end
 
   if x.neat_config.log_config.log_to_console
-    x.neat_config.log_config.timestamp && (print("timestamp = $(now()), "))
-    x.neat_config.log_config.generation && (print("generation = $(x.generation), "))
-    x.neat_config.log_config.best_networks && (print("best_networks = $([i.idx for i in x.winners]), "))
-    x.neat_config.log_config.best_fitness && (print("best_fitness = $([x.fitness[i.idx] for i in x.winners]), "))
-    x.neat_config.log_config.time_taken && (print("time_taken = $(Dates.canonicalize(Dates.Nanosecond(Int128(round((stop_time - start_time)*1e9))))), "))
-    x.neat_config.log_config.species && (print("species = $([i.first for i in x.species]), "))
-    x.neat_config.log_config.max_GIN && (print("max_GIN = $([x.GIN.GIN[end], x.GIN.type[end], x.GIN.start_node[end], x.GIN.stop_node[end]]), "))
+    x.neat_config.log_config.timestamp && (print("timestamp = $(now()); "))
+    x.neat_config.log_config.generation && (print("generation = $(x.generation); "))
+    x.neat_config.log_config.best_networks && (print("best_networks = $(join([i.idx for i in x.winners], ", ")); "))
+    x.neat_config.log_config.best_fitness && (print("best_fitness = $(join([x.fitness[i.idx] for i in x.winners], ", ")); "))
+    x.neat_config.log_config.time_taken && (print("time_taken = $(Dates.canonicalize(Dates.Nanosecond(Int128(round((stop_time - start_time)*1e9))))); "))
+    x.neat_config.log_config.species && (print("species = $(join(sort(collect(keys(x.species))), ", ")); "))
+    x.neat_config.log_config.max_GIN && (print("max_GIN = $(join([x.GIN.GIN[end], x.GIN.type[end], x.GIN.start_node[end], x.GIN.stop_node[end]], ", ")); "))
     println()
     println()
   end
@@ -202,7 +202,7 @@ function UpdatePopulation(x::NEAT)
   append!(new_fitness, Vector{Real}(undef, x.neat_config.population_size-new_population_length))
   for i = new_population_length+1:x.neat_config.population_size
     crossover_probability = [x.neat_config.crossover_probability[1:3]; length(good_individuals)>1 ? x.neat_config.crossover_probability[4:6] : [0,0,0]]
-    crossover = sample(rng(), Weights(crossover_probability[:]))
+    crossover = sample(rng(), 1:6, Weights(crossover_probability[:]))
 
     if crossover == 1 # intraspecie good and good
       specie = rand(rng(), keys(good_individuals))
@@ -296,7 +296,9 @@ function UpdatePopulation(x::NEAT)
       new_fitness[i] = -Inf
     end
 
-    Mutate(new_population[i], x.neat_config.mutation_probability, x.neat_config.network_config)
+    for m = 1:x.neat_config.n_mutations
+      Mutate(new_population[i], x.neat_config.mutation_probability, x.neat_config.network_config)
+    end
   end
 
   for i = 0x1:x.neat_config.population_size
@@ -368,7 +370,7 @@ function Speciate(x::NEAT)
 end
 
 function Train(x::NEAT)
-  for itr = 1:x.neat_config.max_generation
+  for itr = x.generation:x.neat_config.max_generation
     start_time = time()
     Evaluate(x)
     if x.n_generations_passed >= x.neat_config.n_generations_to_pass

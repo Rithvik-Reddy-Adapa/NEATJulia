@@ -38,6 +38,7 @@ end
   const population_size::Unsigned = 50
   max_generation::Unsigned = 100
   n_species::Unsigned = 4 # number of species per generation
+  n_mutations::Unsigned = 1 # number mutations to perform on each new child
   max_specie_stagnation::Unsigned = 20 # for how many number of generations can a specie be alive without improvement
   n_networks_to_pass::Unsigned = 1
   n_generations_to_pass::Unsigned = 1
@@ -45,7 +46,7 @@ end
   n_individuals_to_retain::Real = 1 # number of individuals to retain unchanged for next generation of a specie. Takes real values >= 0. Number less than 1 is considered as ratio over total specie population, number >= 1 is considered as number of individuals.
   threshold_fitness::Real = 0.0
   fitness_test_dict::Dict{String, Any} = Dict{String, Any}()
-  threshold_distance::Real = 3
+  threshold_distance::Real = 5
 
   crossover_probability::CrossoverProbability = CrossoverProbability()
   mutation_probability::MutationProbability = MutationProbability()

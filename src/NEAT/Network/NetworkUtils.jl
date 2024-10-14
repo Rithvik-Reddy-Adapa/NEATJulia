@@ -460,6 +460,18 @@ function GetNetworkDistance(x::Network, y::Network, network_config::NetworkConfi
   return distance
 end
 
+function GetNetworkDistance(x::Vector{Network}, network_config::NetworkConfig)
+  ret = Matrix{Real}(undef, length(x), length(x))
+  for i = 1:length(x)
+    ret[i,i] = 0
+    for j = i+1:length(x)
+      ret[i,j] = GetNetworkDistance(x[i], x[j], network_config)
+      ret[j,i] = ret[i,j]
+    end
+  end
+  return ret
+end
+
 function Crossover(x::Network, y::Network, fitness_x::Real = Inf, fitness_y::Real = -Inf)
   parent1 = nothing
   parent2 = nothing

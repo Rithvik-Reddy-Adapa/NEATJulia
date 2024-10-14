@@ -46,6 +46,8 @@ function Sin(x::Real)
     return 1.0
   elseif x == -Inf
     return -1.0
+  elseif isnan(x)
+    return 0
   else
     return sin(x)
   end

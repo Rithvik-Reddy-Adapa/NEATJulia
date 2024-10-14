@@ -90,8 +90,8 @@ end
 
 function CheckMutationProbability(x::MutationProbability)
   for i in fieldnames(MutationProbability)
-    (getfield(x, i) < 0.0) && error("MutationProbability : got negative value for field $(i)")
     (isfinite(getfield(x, i))) || error("MutationProbability : got a non finite Real number for field $(i)")
+    (getfield(x, i) < 0.0) && error("MutationProbability : got negative value for field $(i)")
     (getfield(x, i) > 1e100) && error("MutationProbability : value greater than 1e100 for field $(i)")
   end
   return
@@ -187,8 +187,8 @@ end
 
 function CheckCrossoverProbability(x::CrossoverProbability)
   for i in fieldnames(CrossoverProbability)
-    (getfield(x, i) < 0.0) && error("CrossoverProbability : got negative value for field $(i)")
     (isfinite(getfield(x, i))) || error("CrossoverProbability : got a non finite Real number for field $(i)")
+    (getfield(x, i) < 0.0) && error("CrossoverProbability : got negative value for field $(i)")
     (getfield(x, i) > 1e100) && error("CrossoverProbability : value greater than 1e100 for field $(i)")
   end
   return

@@ -1,0 +1,638 @@
+digraph G {
+	rankdir = LR;
+	splines = true;
+	ranksep=5;
+	nodesep=0.05;
+
+	1 [shape=diamond, label="1
+InputNode"]
+	2 [shape=diamond, label="2
+InputNode"]
+	{rank=min; 1; 2; }
+
+	18616 [shape=circle, label="18616
+LSTMNode"]
+	{rank=same; 18616; }
+
+	22139 [shape=circle, label="22139
+GRUNode"]
+	{rank=same; 22139; }
+
+	15016 [shape=circle, label="15016
+RecurrentHiddenNode"]
+	{rank=same; 15016; }
+
+	4929 [shape=circle, label="4929
+HiddenNode"]
+	{rank=same; 4929; }
+
+	771 [shape=circle, label="771
+LSTMNode"]
+	{rank=same; 771; }
+
+	29 [shape=circle, label="29
+RecurrentHiddenNode"]
+	7020 [shape=circle, label="7020
+RecurrentHiddenNode"]
+	{rank=same; 29; 7020; }
+
+	14804 [shape=circle, label="14804
+LSTMNode"]
+	{rank=same; 14804; }
+
+	745 [shape=circle, label="745
+HiddenNode"]
+	{rank=same; 745; }
+
+	16011 [shape=circle, label="16011
+GRUNode"]
+	{rank=same; 16011; }
+
+	45208 [shape=circle, label="45208
+GRUNode"]
+	{rank=same; 45208; }
+
+	828 [shape=circle, label="828
+GRUNode"]
+	{rank=same; 828; }
+
+	127 [shape=circle, label="127
+RecurrentHiddenNode"]
+	{rank=same; 127; }
+
+	20287 [shape=circle, label="20287
+RecurrentHiddenNode"]
+	{rank=same; 20287; }
+
+	68164 [shape=circle, label="68164
+LSTMNode"]
+	{rank=same; 68164; }
+
+	37779 [shape=circle, label="37779
+RecurrentHiddenNode"]
+	{rank=same; 37779; }
+
+	31798 [shape=circle, label="31798
+LSTMNode"]
+	36308 [shape=circle, label="36308
+LSTMNode"]
+	{rank=same; 31798; 36308; }
+
+	18512 [shape=circle, label="18512
+HiddenNode"]
+	{rank=same; 18512; }
+
+	26762 [shape=circle, label="26762
+HiddenNode"]
+	47093 [shape=circle, label="47093
+RecurrentHiddenNode"]
+	{rank=same; 26762; 47093; }
+
+	6518 [shape=circle, label="6518
+GRUNode"]
+	{rank=same; 6518; }
+
+	20682 [shape=circle, label="20682
+HiddenNode"]
+	{rank=same; 20682; }
+
+	26811 [shape=circle, label="26811
+LSTMNode"]
+	{rank=same; 26811; }
+
+	14987 [shape=circle, label="14987
+LSTMNode"]
+	{rank=same; 14987; }
+
+	9766 [shape=circle, label="9766
+RecurrentHiddenNode"]
+	22984 [shape=circle, label="22984
+RecurrentHiddenNode"]
+	31982 [shape=circle, label="31982
+HiddenNode"]
+	{rank=same; 9766; 22984; 31982; }
+
+	29655 [shape=circle, label="29655
+LSTMNode"]
+	{rank=same; 29655; }
+
+	50020 [shape=circle, label="50020
+RecurrentHiddenNode"]
+	{rank=same; 50020; }
+
+	18485 [shape=circle, label="18485
+HiddenNode"]
+	{rank=same; 18485; }
+
+	51806 [shape=circle, label="51806
+HiddenNode"]
+	{rank=same; 51806; }
+
+	28953 [shape=circle, label="28953
+RecurrentHiddenNode"]
+	60960 [shape=circle, label="60960
+HiddenNode"]
+	{rank=same; 28953; 60960; }
+
+	27194 [shape=circle, label="27194
+LSTMNode"]
+	{rank=same; 27194; }
+
+	34050 [shape=circle, label="34050
+LSTMNode"]
+	{rank=same; 34050; }
+
+	1281 [shape=circle, label="1281
+HiddenNode"]
+	{rank=same; 1281; }
+
+	4870 [shape=circle, label="4870
+RecurrentHiddenNode"]
+	10124 [shape=circle, label="10124
+HiddenNode"]
+	{rank=same; 4870; 10124; }
+
+	38956 [shape=circle, label="38956
+GRUNode"]
+	{rank=same; 38956; }
+
+	27260 [shape=circle, label="27260
+LSTMNode"]
+	{rank=same; 27260; }
+
+	20227 [shape=circle, label="20227
+GRUNode"]
+	{rank=same; 20227; }
+
+	19080 [shape=circle, label="19080
+RecurrentHiddenNode"]
+	{rank=same; 19080; }
+
+	15789 [shape=circle, label="15789
+RecurrentHiddenNode"]
+	{rank=same; 15789; }
+
+	25454 [shape=circle, label="25454
+LSTMNode"]
+	37254 [shape=circle, label="37254
+LSTMNode"]
+	{rank=same; 25454; 37254; }
+
+	41197 [shape=circle, label="41197
+LSTMNode"]
+	{rank=same; 41197; }
+
+	52716 [shape=circle, label="52716
+HiddenNode"]
+	{rank=same; 52716; }
+
+	13060 [shape=circle, label="13060
+GRUNode"]
+	{rank=same; 13060; }
+
+	12155 [shape=circle, label="12155
+LSTMNode"]
+	24314 [shape=circle, label="24314
+RecurrentHiddenNode"]
+	{rank=same; 12155; 24314; }
+
+	5450 [shape=circle, label="5450
+HiddenNode"]
+	{rank=same; 5450; }
+
+	19318 [shape=circle, label="19318
+LSTMNode"]
+	{rank=same; 19318; }
+
+	24317 [shape=circle, label="24317
+RecurrentHiddenNode"]
+	{rank=same; 24317; }
+
+	23054 [shape=circle, label="23054
+GRUNode"]
+	{rank=same; 23054; }
+
+	24082 [shape=circle, label="24082
+GRUNode"]
+	30556 [shape=circle, label="30556
+HiddenNode"]
+	{rank=same; 24082; 30556; }
+
+	29636 [shape=circle, label="29636
+HiddenNode"]
+	37872 [shape=circle, label="37872
+GRUNode"]
+	{rank=same; 29636; 37872; }
+
+	45245 [shape=circle, label="45245
+RecurrentHiddenNode"]
+	{rank=same; 45245; }
+
+	3 [shape=box, label="3
+OutputNode"]
+	4 [shape=box, label="4
+OutputNode"]
+	5 [shape=box, label="5
+OutputNode"]
+	{rank=max; 3; 4; 5; }
+
+	1->15016 [label = "15017,   1.0", color = green]
+	771->5 [label = "797,   -0.099", color = red]
+	10124->20227 [label = "21007,   1.0", color = grey]
+	20227->25454 [label = "27677,   1.0", color = green]
+	15789->5450 [label = "15822,   -0.054", color = grey]
+	6518->5 [label = "6677,   -0.553", color = red]
+	37872->5 [label = "37999,   1.0", color = green]
+	31798->37779 [label = "37780,   1.0", color = green]
+	771->15789 [label = "16061,   1.0", color = grey]
+	1281->5 [label = "1293,   -0.447", color = red]
+	20682->38956 [label = "42317,   1.152", color = grey]
+	36308->20682 [label = "37953,   1.0", color = green]
+	1281->6518 [label = "6519,   0.272", color = green]
+	37779->14987 [label = "38622,   0.996", color = grey]
+	2->745 [label = "940,   1.73", color = grey]
+	127->5 [label = "183,   0.234", color = green]
+	4870->13060 [label = "14945,   1.002", color = grey]
+	4870->29636 [label = "29637,   1.0", color = green]
+	9766->10124 [label = "12737,   1.0", color = grey]
+	2->26762 [label = "29476,   1.515", color = green]
+	45208->18485 [label = "45210,   1.0", color = grey]
+	3->45245 [label = "45246,   1.0", color = grey]
+	22139->3 [label = "24071,   1.163", color = green]
+	27194->50020 [label = "50021,   1.0", color = grey]
+	15016->27194 [label = "29109,   1.0", color = grey]
+	20682->12155 [label = "20915,   1.018", color = green]
+	29->20227 [label = "22131,   1.017", color = green]
+	127->3 [label = "130,   -0.188", color = red]
+	38956->5 [label = "38958,   1.0", color = grey]
+	18512->38956 [label = "43001,   0.766", color = green]
+	20682->6518 [label = "20684,   0.908", color = green]
+	22139->5450 [label = "22223,   1.0", color = green]
+	9766->20227 [label = "20228,   0.998", color = green]
+	828->127 [label = "862,   1.002", color = grey]
+	37779->26811 [label = "38066,   1.0", color = grey]
+	18616->5450 [label = "18618,   1.909", color = green]
+	15789->25454 [label = "25455,   1.001", color = green]
+	828->3 [label = "1036,   1.755", color = green]
+	6518->4 [label = "6579,   1.0", color = green]
+	771->127 [label = "773,   -0.828", color = red]
+	4929->4870 [label = "5027,   -0.969", color = grey]
+	9766->4870 [label = "9778,   -0.605", color = red]
+	20682->22984 [label = "24004,   0.582", color = grey]
+	29655->14987 [label = "29657,   1.0", color = green]
+	4870->5450 [label = "6901,   0.076", color = green]
+	28953->23054 [label = "34231,   1.0", color = green]
+	14987->15789 [label = "15884,   0.002", color = green]
+	23054->51806 [label = "55935,   -1.528", color = red]
+	29->15789 [label = "16616,   -0.367", color = red]
+	4870->15789 [label = "16223,   1.443", color = grey]
+	771->18485 [label = "18486,   -0.537", color = red]
+	9766->5450 [label = "10110,   -1.244", color = grey]
+	771->3 [label = "904,   0.936", color = green]
+	1->14987 [label = "15061,   0.834", color = green]
+	1281->14987 [label = "14988,   1.046", color = grey]
+	6518->30556 [label = "30776,   1.0", color = green]
+	18512->20287 [label = "20288,   1.0", color = green]
+	771->4 [label = "972,   1.02", color = grey]
+	745->127 [label = "774,   1.0", color = grey]
+	6518->4870 [label = "10043,   0.996", color = grey]
+	1->4870 [label = "4908,   0.993", color = green]
+	3->29 [label = "107,   -0.749", color = grey]
+	6518->12155 [label = "12610,   1.0", color = grey]
+	18512->127 [label = "18514,   -0.966", color = grey]
+	745->22139 [label = "22140,   1.0", color = green]
+	22139->45245 [label = "45263,   1.017", color = green]
+	6518->36308 [label = "36309,   1.0", color = grey]
+	127->6518 [label = "6619,   -0.345", color = red]
+	18616->29 [label = "18983,   1.0", color = grey]
+	828->12155 [label = "12402,   1.0", color = green]
+	127->29 [label = "129,   0.951", color = green]
+	2->771 [label = "772,   -1.065", color = red]
+	47093->127 [label = "47095,   1.0", color = green]
+	745->10124 [label = "10125,   1.004", color = grey]
+	828->18512 [label = "19264,   -0.677", color = grey]
+	26811->31982 [label = "32834,   1.0", color = grey]
+	1->127 [label = "184,   1.0", color = green]
+	6518->9766 [label = "10127,   1.308", color = green]
+	14804->828 [label = "14912,   1.0", color = grey]
+	22139->29655 [label = "30918,   1.0", color = green]
+	127->29636 [label = "30723,   1.0", color = green]
+	68164->20287 [label = "68166,   1.0", color = green]
+	6518->13060 [label = "16585,   -1.067", color = red]
+	41197->51806 [label = "51807,   1.0", color = green]
+	28953->12155 [label = "28955,   1.008", color = green]
+	14987->25454 [label = "26620,   0.797", color = grey]
+	16011->3 [label = "16183,   0.692", color = green]
+	6518->26762 [label = "26763,   0.864", color = green]
+	2->29 [label = "33,   -0.145", color = red]
+	18512->27194 [label = "38179,   0.998", color = green]
+	41197->12155 [label = "42708,   1.0", color = green]
+	3->37872 [label = "43965,   1.0", color = green]
+	6518->3 [label = "6758,   -0.301", color = red]
+	127->24317 [label = "27358,   1.027", color = green]
+	18485->12155 [label = "18487,   1.0", color = green]
+	27194->29655 [label = "29656,   -1.192", color = red]
+	1->36308 [label = "38943,   1.0", color = green]
+	4870->5 [label = "4937,   0.999", color = grey]
+	37779->5450 [label = "38920,   1.0", color = green]
+	2->1281 [label = "1341,   -1.71", color = red]
+	2->5450 [label = "5599,   0.801", color = green]
+	12155->3 [label = "12192,   1.024", color = green]
+	16011->14987 [label = "16013,   1.011", color = green]
+	13060->3 [label = "13062,   1.0", color = grey]
+	15016->16011 [label = "16318,   -0.083", color = red]
+	24082->45245 [label = "45723,   0.998", color = green]
+	771->4870 [label = "5103,   0.994", color = grey]
+	745->3 [label = "747,   0.284", color = grey]
+	22139->26811 [label = "28488,   1.0", color = green]
+	10124->5 [label = "10181,   1.022", color = grey]
+	745->14804 [label = "14805,   0.253", color = grey]
+	37779->20287 [label = "37781,   0.978", color = grey]
+	15789->13060 [label = "16460,   0.989", color = green]
+	41197->45245 [label = "46159,   0.664", color = green]
+	1281->4870 [label = "4961,   1.0", color = grey]
+	20287->38956 [label = "44477,   1.0", color = green]
+	31982->6518 [label = "31984,   1.0", color = grey]
+	16011->127 [label = "19138,   0.94", color = green]
+	2->24082 [label = "27447,   1.0", color = green]
+	12155->41197 [label = "41198,   1.018", color = green]
+	6518->18512 [label = "18513,   1.01", color = grey]
+	771->828 [label = "863,   0.961", color = green]
+	127->5450 [label = "5451,   1.004", color = grey]
+	5450->3 [label = "5452,   1.0", color = grey]
+	1->10124 [label = "10220,   0.107", color = green]
+	18485->4870 [label = "18661,   1.008", color = green]
+	24082->3 [label = "24084,   1.0", color = grey]
+	771->5450 [label = "6321,   1.0", color = green]
+	26811->3 [label = "27871,   1.603", color = green]
+	19080->25454 [label = "25630,   0.652", color = green]
+	745->5 [label = "770,   1.953", color = grey]
+	1->771 [label = "896,   -0.08", color = grey]
+	20682->24314 [label = "25044,   -1.94", color = red]
+	26811->20227 [label = "30855,   1.0", color = green]
+	26762->5 [label = "31489,   1.0", color = green]
+	828->20287 [label = "20628,   1.0", color = green]
+	5450->5 [label = "5491,   0.495", color = green]
+	18512->24317 [label = "31757,   1.005", color = green]
+	23054->19318 [label = "23056,   1.0", color = green]
+	19080->52716 [label = "58558,   -0.058", color = red]
+	22139->31798 [label = "31919,   1.0", color = green]
+	12155->24317 [label = "24613,   -0.819", color = grey]
+	29->24317 [label = "25851,   1.106", color = green]
+	1->4 [label = "7,   1.697", color = green]
+	15016->50020 [label = "57654,   1.0", color = green]
+	4870->12155 [label = "12247,   1.315", color = green]
+	20287->127 [label = "20289,   1.0", color = green]
+	31798->20287 [label = "31800,   1.0", color = grey]
+	26811->127 [label = "26813,   0.737", color = grey]
+	9766->1281 [label = "9823,   -1.726", color = grey]
+	3->1281 [label = "1282,   1.874", color = grey]
+	14804->4 [label = "14959,   1.013", color = green]
+	1281->3 [label = "1379,   -1.989", color = grey]
+	9766->12155 [label = "12663,   -1.063", color = grey]
+	29->5 [label = "31,   1.257", color = green]
+	2->127 [label = "146,   0.341", color = grey]
+	25454->12155 [label = "25456,   1.246", color = green]
+	745->4870 [label = "4909,   -0.17", color = grey]
+	13060->24314 [label = "24787,   -1.85", color = red]
+	771->29 [label = "793,   -1.447", color = grey]
+	4929->4 [label = "5033,   0.995", color = green]
+	15016->23054 [label = "29746,   1.0", color = green]
+	19318->24317 [label = "25887,   1.002", color = green]
+	29636->4 [label = "29638,   1.0", color = green]
+	22139->15016 [label = "24692,   1.0", color = grey]
+	14987->5450 [label = "15093,   0.914", color = green]
+	1281->31982 [label = "31983,   1.0", color = grey]
+	2->6518 [label = "6528,   -1.657", color = red]
+	771->45208 [label = "45209,   1.009", color = grey]
+	15016->29 [label = "15233,   0.637", color = green]
+	27194->4870 [label = "27946,   1.0", color = grey]
+	13060->5450 [label = "13145,   1.013", color = grey]
+	14804->26762 [label = "29160,   1.0", color = grey]
+	20682->13060 [label = "21310,   -1.169", color = red]
+	828->24317 [label = "25403,   0.161", color = green]
+	27194->34050 [label = "35798,   1.371", color = green]
+	828->14987 [label = "14990,   1.0", color = green]
+	828->6518 [label = "6812,   1.012", color = green]
+	38956->23054 [label = "40323,   1.0", color = green]
+	9766->29 [label = "9768,   -1.84", color = red]
+	14804->2 [label = "14806,   1.0", color = grey]
+	1->828 [label = "1080,   1.121", color = green]
+	16011->20682 [label = "21458,   -0.47", color = red]
+	771->745 [label = "908,   1.094", color = grey]
+	745->1281 [label = "1380,   0.967", color = green]
+	1281->5450 [label = "5544,   -1.66", color = red]
+	29->5450 [label = "5512,   1.0", color = green]
+	7020->23054 [label = "23069,   1.026", color = green]
+	14987->6518 [label = "14989,   1.009", color = green]
+	22984->127 [label = "22986,   0.01", color = green]
+	6518->28953 [label = "29357,   0.004", color = green]
+	6518->5450 [label = "6556,   1.011", color = grey]
+	4870->127 [label = "4872,   1.0", color = grey]
+	1->29 [label = "30,   1.051", color = grey]
+	20682->24317 [label = "25246,   1.0", color = green]
+	15789->5 [label = "16117,   -0.265", color = grey]
+	20227->24317 [label = "25453,   1.0", color = green]
+	1->3 [label = "6,   -0.455", color = grey]
+	29655->37254 [label = "37607,   0.988", color = green]
+	29655->24314 [label = "30781,   1.0", color = grey]
+	745->5450 [label = "5511,   1.0", color = grey]
+	127->4 [label = "182,   0.923", color = green]
+	4870->4 [label = "5032,   1.0", color = green]
+	10124->13060 [label = "13061,   1.0", color = green]
+	14987->12155 [label = "15160,   1.0", color = green]
+	10124->3 [label = "10387,   -1.88", color = red]
+	22139->2 [label = "22141,   -1.439", color = red]
+	14987->29655 [label = "30785,   1.0", color = grey]
+	29->18512 [label = "20439,   1.0", color = green]
+	127->10124 [label = "10165,   1.011", color = green]
+	2->13060 [label = "13281,   0.664", color = green]
+	14987->20682 [label = "20683,   1.021", color = grey]
+	1->1281 [label = "1541,   -1.966", color = grey]
+	14987->13060 [label = "16367,   -1.513", color = grey]
+	29->25454 [label = "26648,   1.0", color = green]
+	4870->22984 [label = "22985,   1.0", color = grey]
+	37872->4 [label = "37874,   1.0", color = grey]
+	24317->3 [label = "24576,   0.988", color = green]
+	3->9766 [label = "9767,   1.007", color = green]
+	15789->19318 [label = "20379,   0.56", color = green]
+	37254->4 [label = "37256,   1.01", color = green]
+	2->5 [label = "11,   -1.62", color = red]
+	1->18616 [label = "18617,   1.0", color = grey]
+	745->2 [label = "2083,   1.126", color = grey]
+	828->1281 [label = "1323,   1.176", color = grey]
+	6518->15789 [label = "15790,   0.996", color = grey]
+	9766->13060 [label = "16799,   0.987", color = green]
+	745->16011 [label = "16012,   1.0", color = grey]
+	3->4870 [label = "4871,   1.727", color = green]
+	52716->19318 [label = "52718,   1.0", color = green]
+	4870->3 [label = "4879,   0.986", color = grey]
+	18616->20227 [label = "21167,   1.0", color = green]
+	29->1281 [label = "1330,   -1.162", color = red]
+	3->30556 [label = "30557,   1.007", color = grey]
+	41197->19080 [label = "41199,   0.992", color = green]
+	29->19318 [label = "19419,   0.998", color = grey]
+	29->127 [label = "156,   -0.129", color = grey]
+	127->13060 [label = "16637,   1.008", color = green]
+	13060->24082 [label = "24083,   1.011", color = green]
+	22984->28953 [label = "28954,   1.0", color = grey]
+	24082->4 [label = "24173,   1.0", color = green]
+	2->4 [label = "10,   0.131", color = green]
+	5->5450 [label = "9187,   1.754", color = green]
+	24314->5 [label = "24316,   0.99", color = green]
+	20682->34050 [label = "34051,   0.604", color = green]
+	24314->30556 [label = "32615,   1.0", color = green]
+	4870->20227 [label = "21199,   1.0", color = grey]
+	16011->24317 [label = "25072,   1.0", color = grey]
+	828->4870 [label = "4941,   0.997", color = green]
+	45245->23054 [label = "45247,   0.994", color = green]
+	12155->4870 [label = "12157,   -0.313", color = red]
+	1281->10124 [label = "10269,   1.314", color = grey]
+	27194->5450 [label = "36775,   -0.898", color = red]
+	34050->38956 [label = "39585,   -0.746", color = red]
+	52716->4 [label = "53590,   1.0", color = green]
+	12155->5450 [label = "12169,   1.501", color = green]
+	9766->19318 [label = "19902,   1.0", color = grey]
+	2->3 [label = "9,   0.074", color = grey]
+	745->14987 [label = "15197,   1.405", color = green]
+	16011->6518 [label = "16171,   0.985", color = green]
+	6518->22984 [label = "23597,   1.0", color = green]
+	27260->13060 [label = "27262,   -1.388", color = red]
+	18616->3 [label = "20650,   1.0", color = grey]
+	19318->1281 [label = "19320,   0.881", color = green]
+	24314->24317 [label = "24318,   0.999", color = green]
+	37254->23054 [label = "40782,   1.0", color = green]
+	2->12155 [label = "12544,   0.992", color = grey]
+	30556->4 [label = "31741,   1.0", color = green]
+	18512->13060 [label = "18608,   1.965", color = green]
+	27194->14987 [label = "27196,   0.223", color = green]
+	29->12155 [label = "12263,   1.0", color = grey]
+	26762->34050 [label = "35630,   1.0", color = green]
+	18616->20682 [label = "21003,   1.0", color = grey]
+	2->828 [label = "859,   0.993", color = grey]
+	127->9766 [label = "9775,   0.327", color = green]
+	20682->5450 [label = "21107,   1.0", color = green]
+	18485->19080 [label = "19171,   -1.234", color = red]
+	127->12155 [label = "12228,   1.487", color = grey]
+	7020->5 [label = "7022,   1.548", color = green]
+	26811->19080 [label = "26898,   1.53", color = green]
+	771->10124 [label = "11683,   1.664", color = green]
+	20682->27194 [label = "29265,   1.0", color = grey]
+	50020->29655 [label = "50022,   1.0", color = green]
+	1->5 [label = "8,   -0.825", color = grey]
+	18485->20227 [label = "20312,   1.001", color = green]
+	10124->12155 [label = "12176,   1.243", color = green]
+	4929->5 [label = "5148,   -0.878", color = grey]
+	30556->29636 [label = "30652,   1.0", color = grey]
+	2->15789 [label = "16382,   -1.592", color = red]
+	26762->20682 [label = "27590,   -0.976", color = grey]
+	13060->24317 [label = "24423,   1.0", color = grey]
+	60960->30556 [label = "60962,   1.0", color = green]
+	4929->745 [label = "5118,   -1.911", color = red]
+	14987->30556 [label = "30876,   1.0", color = grey]
+	10124->5450 [label = "10126,   0.569", color = green]
+	30556->19080 [label = "30747,   1.0", color = grey]
+	14804->24317 [label = "25466,   -1.324", color = grey]
+	22139->23054 [label = "23194,   -0.364", color = grey]
+	14987->27194 [label = "27835,   0.986", color = green]
+	18485->23054 [label = "35872,   1.0", color = green]
+	20227->5 [label = "21679,   1.0", color = green]
+	1281->127 [label = "1283,   0.987", color = grey]
+	828->4 [label = "830,   1.157", color = grey]
+	24314->29636 [label = "30419,   1.0", color = green]
+	19080->24317 [label = "25111,   1.014", color = green]
+	22139->29636 [label = "30763,   1.0", color = green]
+	22984->12155 [label = "23567,   -0.925", color = red]
+	1->4929 [label = "4930,   1.0", color = grey]
+	4929->24317 [label = "26690,   1.0", color = grey]
+	4929->7020 [label = "7021,   -1.352", color = grey]
+	30556->23054 [label = "30558,   1.0", color = green]
+	828->5 [label = "888,   1.596", color = green]
+	7020->20227 [label = "20694,   -1.322", color = red]
+	23054->30556 [label = "32463,   1.0", color = green]
+	127->1281 [label = "1386,   1.547", color = green]
+	15789->24314 [label = "24315,   1.0", color = green]
+	771->6518 [label = "6679,   1.238", color = grey]
+	26762->18512 [label = "26764,   0.98", color = green]
+	26762->25454 [label = "27750,   0.854", color = green]
+	15789->52716 [label = "52717,   1.0", color = green]
+	24314->23054 [label = "24718,   1.0", color = green]
+	6518->20682 [label = "21416,   1.006", color = grey]
+	18485->51806 [label = "51809,   1.0", color = green]
+	1281->4 [label = "1340,   -1.212", color = grey]
+	15789->12155 [label = "15791,   -0.639", color = red]
+	6518->127 [label = "6520,   0.894", color = grey]
+	27194->24082 [label = "27717,   1.0", color = green]
+	15016->20287 [label = "39309,   0.997", color = green]
+	24082->37872 [label = "37873,   1.0", color = grey]
+	4929->771 [label = "4931,   0.982", color = green]
+	24082->5 [label = "24126,   1.0", color = grey]
+	29->828 [label = "829,   -0.819", color = red]
+	5450->4 [label = "5495,   -0.145", color = grey]
+	828->20682 [label = "21790,   1.321", color = grey]
+	18616->4929 [label = "26840,   0.306", color = green]
+	745->828 [label = "903,   1.598", color = green]
+	29->3 [label = "34,   -0.146", color = red]
+	29->4 [label = "50,   0.808", color = green]
+	12155->4 [label = "12231,   1.876", color = green]
+	14804->12155 [label = "14847,   0.972", color = green]
+	41197->14804 [label = "45510,   1.0", color = green]
+	4870->25454 [label = "25707,   1.0", color = grey]
+	19080->4870 [label = "19082,   1.018", color = grey]
+	18616->828 [label = "18987,   1.006", color = green]
+	127->19318 [label = "20552,   0.409", color = grey]
+	36308->127 [label = "36310,   1.0", color = grey]
+	1281->27194 [label = "27195,   1.0", color = grey]
+	14987->60960 [label = "60961,   1.0", color = grey]
+	27260->29636 [label = "30049,   1.0", color = green]
+	6518->14987 [label = "15034,   1.0", color = green]
+	14987->50020 [label = "55384,   1.0", color = green]
+	3->23054 [label = "23055,   1.0", color = grey]
+	745->4 [label = "798,   0.046", color = green]
+	29->745 [label = "746,   1.808", color = grey]
+	37779->68164 [label = "68165,   1.0", color = green]
+	1->26762 [label = "31074,   1.0", color = green]
+	18512->12155 [label = "18979,   1.0", color = green]
+	1->5450 [label = "5565,   -1.881", color = red]
+	3->127 [label = "128,   1.034", color = green]
+	22139->127 [label = "23282,   -0.62", color = red]
+	15016->4929 [label = "15018,   1.0", color = green]
+	19318->4 [label = "19756,   1.0", color = grey]
+	38956->45245 [label = "45519,   1.0", color = green]
+	24317->5 [label = "24319,   1.882", color = green]
+	18512->31798 [label = "31799,   1.0", color = green]
+	10124->38956 [label = "38957,   1.542", color = green]
+	771->1281 [label = "1686,   -0.313", color = red]
+	127->4870 [label = "4938,   1.442", color = green]
+	5450->12155 [label = "12156,   1.109", color = grey]
+	3->19318 [label = "19319,   -0.795", color = grey]
+	20227->19318 [label = "20229,   1.014", color = green]
+	51806->14804 [label = "51808,   1.0", color = green]
+	38956->24317 [label = "39642,   1.0", color = green]
+	2->16011 [label = "16339,   1.001", color = green]
+	20227->41197 [label = "42148,   1.0", color = grey]
+	29->6518 [label = "6557,   1.0", color = green]
+	13060->12155 [label = "13153,   1.0", color = grey]
+	4870->26811 [label = "26812,   1.316", color = green]
+	2->14987 [label = "17042,   1.014", color = green]
+	4870->27260 [label = "27261,   1.0", color = grey]
+	34050->5450 [label = "34052,   1.0", color = grey]
+	4870->47093 [label = "47094,   1.0", color = green]
+	20287->24317 [label = "25190,   1.0", color = green]
+	5450->4870 [label = "10597,   -0.304", color = red]
+	29->4870 [label = "5023,   1.103", color = grey]
+	12155->5 [label = "12221,   0.873", color = green]
+	1->745 [label = "887,   -1.861", color = red]
+	1->6518 [label = "6954,   1.0", color = grey]
+	19318->3 [label = "19324,   0.992", color = green]
+	27194->20227 [label = "31626,   1.0", color = green]
+	828->37254 [label = "37255,   1.0", color = green]
+	34050->23054 [label = "40497,   1.0", color = grey]
+	1->12155 [label = "12390,   1.037", color = green]
+	20682->23054 [label = "24552,   -1.891", color = red]
+	29655->27194 [label = "30145,   1.134", color = green]
+	771->12155 [label = "12507,   -1.356", color = red]
+	4870->19080 [label = "23824,   1.925", color = green]
+	12155->19080 [label = "19081,   1.416", color = grey]
+	20682->20227 [label = "21144,   -0.475", color = grey]
+}
