@@ -55,7 +55,7 @@ end
 
 function Run(x::Network)
   for l in x.layers
-    for n in l
+    Threads.@threads for n in l
       Run(n)
       for c in n.out_connections
         Run(c)
@@ -70,7 +70,7 @@ function GetInput(x::Network)
   return [i[] for i in x.input]
 end
 
-function SetInput(x::Network, args::Vector{<:Real})
+function SetInput(x::Network, args::Vector{Union{Missing, <:Real}})
   length(args) == x.n_inputs || error("SetInput : Invalid number of arguments, got $(length(args)) required $(x.n_inputs)")
 
   for i = 1:x.n_inputs

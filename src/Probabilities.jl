@@ -8,14 +8,14 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
   no_mutation::Real = 1.0
 
   # global mutations
-  global_change_weight::Real = 1.0
+  global_change_weight::Real = 0.5
   global_shift_weight::Real = 1.0
-  global_change_bias::Real = 1.0
+  global_change_bias::Real = 0.5
   global_shift_bias::Real = 1.0
-  global_change_activation_function::Real = 1.0
-  global_toggle_enable::Real = 1.0
-  global_enable_gene::Real = 1.0
-  global_disable_gene::Real = 1.0
+  global_change_activation_function::Real = 0.5
+  global_toggle_enable::Real = 0.01
+  global_enable_gene::Real = 0
+  global_disable_gene::Real = 0
 
   # input node mutations
   input_node_change_bias::Real = 0.0
@@ -28,7 +28,7 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
   output_node_change_activation_function::Real = 0.0
 
   # forward connection mutations
-  add_forward_connection::Real = 0.5
+  add_forward_connection::Real = 0.05
   forward_connection_change_weight::Real = 0.0
   forward_connection_shift_weight::Real = 0.0
   forward_connection_toggle_enable::Real = 0.0
@@ -36,7 +36,7 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
   forward_connection_disable_gene::Real = 0.0
 
   # backward connection mutations
-  add_backward_connection::Real = 0.01
+  add_backward_connection::Real = 0
   backward_connection_change_weight::Real = 0.0
   backward_connection_shift_weight::Real = 0.0
   backward_connection_toggle_enable::Real = 0.0
@@ -45,7 +45,7 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
 
   # hidden node mutations
   add_hidden_node_forward_connection::Real = 0.01
-  add_hidden_node_backward_connection::Real = 0.01
+  add_hidden_node_backward_connection::Real = 0
   hidden_node_change_bias::Real = 0.0
   hidden_node_shift_bias::Real = 0.0
   hidden_node_change_activation_function::Real = 0.0
@@ -54,8 +54,8 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
   hidden_node_disable_gene::Real = 0.0
 
   # recurrent hidden node mutations
-  add_recurrent_hidden_node_forward_connection::Real = 0.01
-  add_recurrent_hidden_node_backward_connection::Real = 0.01
+  add_recurrent_hidden_node_forward_connection::Real = 0
+  add_recurrent_hidden_node_backward_connection::Real = 0
   recurrent_hidden_node_change_weight::Real = 0.0
   recurrent_hidden_node_shift_weight::Real = 0.0
   recurrent_hidden_node_change_bias::Real = 0.0
@@ -66,8 +66,8 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
   recurrent_hidden_node_disable_gene::Real = 0.0
 
   # LSTM node mutations
-  add_lstm_node_forward_connection::Real = 0.01
-  add_lstm_node_backward_connection::Real = 0.01
+  add_lstm_node_forward_connection::Real = 0
+  add_lstm_node_backward_connection::Real = 0
   lstm_node_change_weight::Real = 0.0
   lstm_node_shift_weight::Real = 0.0
   lstm_node_change_bias::Real = 0.0
@@ -77,8 +77,8 @@ export MutationProbability, CheckMutationProbability, CrossoverProbability, Chec
   lstm_node_disable_gene::Real = 0.0
 
   # GRU node mutations
-  add_gru_node_forward_connection::Real = 0.01
-  add_gru_node_backward_connection::Real = 0.01
+  add_gru_node_forward_connection::Real = 0
+  add_gru_node_backward_connection::Real = 0
   gru_node_change_weight::Real = 0.0
   gru_node_shift_weight::Real = 0.0
   gru_node_change_bias::Real = 0.0

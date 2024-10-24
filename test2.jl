@@ -32,21 +32,21 @@ fitness_test_dict = Dict("amp" => [12, 10, 3],
                          "freq" => [50, 55, 60],
                          "phi" => [0, pi/4, pi/3],
                          "max_time" => 0.2,
-                         "buffer_size" => 256,
+                         "buffer_size" => 64,
                          "dt" => 0.001,
                          "fitness_function" => fitness_function,
                         )
 
 mutation_probability = MutationProbability(
                                             # global mutations
-                                            global_change_weight = 1.0,
-                                            global_shift_weight = 3.0,
-                                            global_change_bias = 1.0,
+                                            global_change_weight = 0.5,
+                                            global_shift_weight = 1.0,
+                                            global_change_bias = 0.5,
                                             global_shift_bias = 1.0,
-                                            global_change_activation_function = 1.0,
-                                            global_toggle_enable = 1.0,
-                                            global_enable_gene = 1.0,
-                                            global_disable_gene = 1.0,
+                                            global_change_activation_function = 0.5,
+                                            global_toggle_enable = 0.01,
+                                            global_enable_gene = 0,
+                                            global_disable_gene = 0,
 
                                             # input node mutations
                                             input_node_change_bias = 0.0,
@@ -142,10 +142,17 @@ neat_config = NEATConfig(
 
                          mutation_probability = mutation_probability,
                          crossover_probability = crossover_probability,
+
+                         save_every_n_generations = 100,
+                         save_every_n_generations_discard_previous = true,
+                         save_every_n_generations_path = "./checkpoints/",
+                         save_every_n_generations_filename = "NEAT",
+                         save_at_termination = true,
+                         save_at_termination_filename = "NEAT",
                         )
 
-neat_config.network_config.start_fully_connected = false
-neat_config.network_config.distance_parameters = [1,1,3]
+neat_config.network_config.start_fully_connected = true
+neat_config.network_config.distance_parameters = [1,1,1]
 
 Clamp(x::Real) = isfinite(x) ? (return clamp(x, -pi/2, 65)) : (return 0)
 
@@ -178,5 +185,4 @@ Init(neat)
 
 Train(neat)
 
-Save(neat)
 

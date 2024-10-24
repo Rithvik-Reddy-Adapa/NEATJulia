@@ -5,6 +5,9 @@ NEAT(;kwargs...) = NEAT{Network}(;kwargs...) # this is defined because, at the p
 
 function Log(x::NEAT, start_time::Float64 = time(), stop_time::Float64 = time(); first_entry::Bool = false)
   if x.neat_config.log_config.log_to_file
+    path = abspath(x.neat_config.save_every_n_generations_path)
+    mkpath(path)
+    path = joinpath(path, x.neat_config.log_config.filename)
     deli::String= x.neat_config.log_config.delimeter
     text::String = ""
     if first_entry
@@ -16,7 +19,7 @@ function Log(x::NEAT, start_time::Float64 = time(), stop_time::Float64 = time();
       x.neat_config.log_config.species && (text *= "species$(deli)")
       x.neat_config.log_config.max_GIN && (text *= "max_GIN$(deli)")
       text *= "\n"
-      open(x.neat_config.log_config.filename, "w") do f
+      open(path, "w") do f
         write(f, text)
       end
     end
@@ -30,7 +33,7 @@ function Log(x::NEAT, start_time::Float64 = time(), stop_time::Float64 = time();
     x.neat_config.log_config.species && (text *= "$(join(sort(collect(keys(x.species))), ", "))$(deli)")
     x.neat_config.log_config.max_GIN && (text *= "$(join([x.GIN.GIN[end], x.GIN.type[end], x.GIN.start_node[end], x.GIN.stop_node[end]], ", "))$(deli)")
     text *= "\n"
-    open(x.neat_config.log_config.filename, "a") do f
+    open(path, "a") do f
       write(f, text)
     end
   end
@@ -370,13 +373,39 @@ function Speciate(x::NEAT)
 end
 
 function Train(x::NEAT)
+  last_saved_generation = 0
   for itr = x.generation:x.neat_config.max_generation
     start_time = time()
     Evaluate(x)
     if x.n_generations_passed >= x.neat_config.n_generations_to_pass
       println("Congratulations NEAT is trained in $(x.generation) generations")
       println("Winners: $(join([i.idx for i in x.winners], ", "))")
+      if x.neat_config.save_at_termination
+        path = abspath(x.neat_config.save_every_n_generations_path)
+        mkpath(path)
+        if x.neat_config.save_every_n_generations_discard_previous
+          if ispath(joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(last_saved_generation).jld2"))
+            rm(joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(last_saved_generation).jld2"))
+          end
+        end
+        last_saved_generation = x.generation
+        path = joinpath(path, x.neat_config.save_at_termination_filename)
+        Save(x, path)
+      end
       return
+    end
+
+    if x.neat_config.save_every_n_generations > 0 && (x.generation % x.neat_config.save_every_n_generations == 0)
+      path = abspath(x.neat_config.save_every_n_generations_path)
+      mkpath(path)
+      if x.neat_config.save_every_n_generations_discard_previous
+        if ispath(joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(last_saved_generation).jld2"))
+          rm(joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(last_saved_generation).jld2"))
+        end
+      end
+      last_saved_generation = x.generation
+      path = joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(x.generation).jld2")
+      Save(x, path)
     end
 
     UpdatePopulation(x)
@@ -388,6 +417,18 @@ function Train(x::NEAT)
   end
 
   Evaluate(x)
+  if x.neat_config.save_at_termination
+    path = abspath(x.neat_config.save_every_n_generations_path)
+    mkpath(path)
+    if x.neat_config.save_every_n_generations_discard_previous
+      if ispath(joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(last_saved_generation).jld2"))
+        rm(joinpath(path, x.neat_config.save_every_n_generations_filename*"-gen_$(last_saved_generation).jld2"))
+      end
+    end
+    last_saved_generation = x.generation
+    path = joinpath(path, x.neat_config.save_at_termination_filename*".jld2")
+    Save(x, path)
+  end
   println("Max generation reached, training terminated")
   println("Winners: $(join([i.idx for i in x.winners], ", "))")
   return

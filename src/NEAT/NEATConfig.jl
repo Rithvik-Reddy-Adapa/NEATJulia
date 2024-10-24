@@ -53,6 +53,13 @@ end
 
   network_config::NetworkConfig = NetworkConfig()
   log_config::LogConfig = LogConfig()
+
+  save_every_n_generations::Unsigned = 0
+  save_every_n_generations_discard_previous::Bool = false
+  save_every_n_generations_path::String = "./checkpoints/"
+  save_every_n_generations_filename::String = "NEAT"
+  save_at_termination::Bool = true
+  save_at_termination_filename::String = "NEAT"
 end
 
 function CheckConfig(x::NEATConfig)
@@ -76,6 +83,8 @@ function CheckConfig(x::NEATConfig)
   CheckMutationProbability(x.mutation_probability)
 
   CheckConfig(x.network_config)
+
+  isempty(x.save_every_n_generations_path) && error("NEATConfig : save_every_n_generations_path is empty, this path is used to save logs and to save NEAT")
 
   return
 end
