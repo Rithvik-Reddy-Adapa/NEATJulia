@@ -1,4 +1,4 @@
-using Debugger, DataStructures, Plotly, StatsBase
+using Debugger, DataStructures, Plotly, StatsBase, JLD2
 include("src/NEATJulia.jl")
 using .NEATJulia
 
@@ -13,7 +13,9 @@ function fitness_function(dict::Dict{String, Any}, network::Network, neat::NEAT)
     for (t,v) in zip(T, V)
       push!(buffer_t, t)
       push!(buffer_v, v)
-      SetInput(network, [t,v])
+      input = Union{Real, Missing}[dict["dt"]; collect(buffer_v)]
+      append!(input, fill(missing, (1+dict["buffer_size"]-length(input))))
+      SetInput(network, input)
       amp, freq, phi = Run(network)
       (ismissing(amp) || !isfinite(amp) || ismissing(freq) || !isfinite(freq) || ismissing(phi) || !isfinite(phi)) && (return -Inf)
       v_out = amp .* sin.(2 .*pi.*freq.*buffer_t .+ phi)
@@ -57,7 +59,7 @@ mutation_probability = MutationProbability(
                                             output_node_change_activation_function = 0.0,
 
                                             # forward connection mutations
-                                            add_forward_connection = 0.5,
+                                            add_forward_connection = 0.05,
                                             forward_connection_change_weight = 0.0,
                                             forward_connection_shift_weight = 0.0,
                                             forward_connection_toggle_enable = 0.0,
@@ -65,7 +67,7 @@ mutation_probability = MutationProbability(
                                             forward_connection_disable_gene = 0.0,
 
                                             # backward connection mutations
-                                            add_backward_connection = 0.01,
+                                            add_backward_connection = 0,
                                             backward_connection_change_weight = 0.0,
                                             backward_connection_shift_weight = 0.0,
                                             backward_connection_toggle_enable = 0.0,
@@ -74,7 +76,7 @@ mutation_probability = MutationProbability(
 
                                             # hidden node mutations
                                             add_hidden_node_forward_connection = 0.01,
-                                            add_hidden_node_backward_connection = 0.01,
+                                            add_hidden_node_backward_connection = 0,
                                             hidden_node_change_bias = 0.0,
                                             hidden_node_shift_bias = 0.0,
                                             hidden_node_change_activation_function = 0.0,
@@ -83,8 +85,8 @@ mutation_probability = MutationProbability(
                                             hidden_node_disable_gene = 0.0,
 
                                             # recurrent hidden node mutations
-                                            add_recurrent_hidden_node_forward_connection = 0.01,
-                                            add_recurrent_hidden_node_backward_connection = 0.01,
+                                            add_recurrent_hidden_node_forward_connection = 0,
+                                            add_recurrent_hidden_node_backward_connection = 0,
                                             recurrent_hidden_node_change_weight = 0.0,
                                             recurrent_hidden_node_shift_weight = 0.0,
                                             recurrent_hidden_node_change_bias = 0.0,
@@ -95,8 +97,8 @@ mutation_probability = MutationProbability(
                                             recurrent_hidden_node_disable_gene = 0.0,
 
                                             # LSTM node mutations
-                                            add_lstm_node_forward_connection = 0.01,
-                                            add_lstm_node_backward_connection = 0.01,
+                                            add_lstm_node_forward_connection = 0,
+                                            add_lstm_node_backward_connection = 0,
                                             lstm_node_change_weight = 0.0,
                                             lstm_node_shift_weight = 0.0,
                                             lstm_node_change_bias = 0.0,
@@ -106,8 +108,8 @@ mutation_probability = MutationProbability(
                                             lstm_node_disable_gene = 0.0,
 
                                             # GRU node mutations
-                                            add_gru_node_forward_connection = 0.01,
-                                            add_gru_node_backward_connection = 0.01,
+                                            add_gru_node_forward_connection = 0,
+                                            add_gru_node_backward_connection = 0,
                                             gru_node_change_weight = 0.0,
                                             gru_node_shift_weight = 0.0,
                                             gru_node_change_bias = 0.0,
@@ -128,7 +130,7 @@ crossover_probability = CrossoverProbability(
                                             )
 
 neat_config = NEATConfig(
-                         n_inputs = 2,
+                         n_inputs = 1+fitness_test_dict["buffer_size"],
                          n_outputs = 3,
                          population_size = 100,
                          max_generation = 5000,
